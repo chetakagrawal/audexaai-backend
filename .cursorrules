@@ -1,14 +1,17 @@
 # Cursor Project Rules — Backend
-FastAPI · Python 3.13 · Poetry · Postgres · SQLAlchemy 2.x (async) · Alembic · JWT
+FastAPI · Python 3.13 · Poetry · PostgreSQL · SQLAlchemy 2.x (async) · Alembic · JWT
 
----
+================================================================
 
-## 1. Non-negotiables
-- TDD required: tests first → minimal code → refactor.
+## 1. Non-negotiables (highest priority)
+- Strict TDD: tests first → minimal code → refactor.
 - No tests = not done.
-- No backward-compat guarantees in dev; tests define the contract.
+- Tests define the contract in development (no backward-compat guarantees).
+- Production-grade code only; no placeholders or TODOs unless explicitly requested.
+- Rules apply to production code under api/, services/, repos/, models/, schemas/, core/, and tests.
+  They do not apply to docs, tooling scripts, or migrations beyond safety rules.
 
----
+================================================================
 
 ## 2. Architecture & layering
 api/        → routers, request/response schemas, auth dependencies  
@@ -19,11 +22,15 @@ schemas/    → Pydantic DTOs
 core/       → config, security, logging  
 
 Rules:
-- Routers → Services → Repos → DB
-- No DB calls in routers
-- No HTTP concepts in services or repos
+- Routers → Services → Repos → Database
+- No database access in routers.
+- No HTTP concepts in services or repos.
+- Services must be framework-agnostic.
+- services/ must not import from api/.
+- repos/ must not import from api/ or services/.
+- api/ may import schemas/ and call services/ only.
 
----
+================================================================
 
 ## 3. Design references (source of truth)
 - docs/architecture/erd.md
@@ -33,11 +40,11 @@ Rules:
 Rules:
 - ERD is a reference, not a schema generator.
 - Schema changes must move incrementally toward the ERD.
-- Never generate all tables from the ERD in one migration.
+- Never generate all tables from the ERD in a single migration.
 
----
+================================================================
 
-## 4. Multi-tenant safety
+## 4. Multi-tenant safety (critical)
 Every request must resolve:
 - User
 - Membership (UserTenant.id)
@@ -45,60 +52,105 @@ Every request must resolve:
 
 Rules:
 - Never accept tenant_id from client input.
+- Tenant resolution happens in an auth dependency and is passed to services as context.
 - Every tenant-owned table must include tenant_id.
 - Tenant-scoped ownership must reference UserTenant.id.
 - All tenant-scoped queries must filter by tenant_id.
+- Unique business keys must be composite: UNIQUE(tenant_id, business_key).
+- Cross-tenant access must be explicitly tested and blocked.
 
----
+================================================================
 
 ## 5. Database rules
 - SQLAlchemy async only.
-- Explicit transactions for multi-step writes.
-- Sessions via dependency injection.
-- Required indexes:
-  - (tenant_id, id)
-  - (tenant_id, business_key)
+- Sessions provided via dependency injection.
+- Use `async with session.begin():` for multi-step writes.
+- Required indexes for tenant-owned tables must match query patterns:
+  - (tenant_id, <lookup_key>) where <lookup_key> is frequently filtered or sorted.
 
----
+================================================================
 
 ## 6. Alembic & migrations
 - Any model change requires a migration.
-- Migrations must be small and reversible.
+- Migrations must be small, explicit, and reversible.
 - Pattern for required columns:
-  1. add nullable
-  2. backfill
-  3. enforce NOT NULL + FK + index
+  1) add nullable
+  2) backfill
+  3) enforce NOT NULL + FK + index
+- Never combine unrelated schema changes in one migration.
 
----
+================================================================
 
 ## 7. Auth & JWT
 - JWT logic lives in core/security.py.
-- Never log tokens or secrets.
+- Never log tokens, secrets, or credentials.
 
 Required tests:
-- valid token
-- invalid / expired token rejected
+- valid token accepted
+- invalid or expired token rejected
 - cross-tenant access blocked
 
----
+================================================================
 
-## 8. Testing
+## 8. Testing (testing pyramid enforced)
+
+### 8.0 Default pyramid
+- services/ + core/: unit tests (primary confidence)
+- api/: integration tests via httpx.AsyncClient
+- repos/: DB-backed tests only for non-trivial queries and tenant enforcement
+
+### 8.1 Tooling
 - pytest + pytest-asyncio + httpx.AsyncClient
-- Ephemeral DB preferred.
+- Ephemeral PostgreSQL preferred.
 - No real network calls.
-- Deterministic tests only.
+- Deterministic tests only (no wall-clock dependence).
 
-Each change must include:
+### 8.2 Unit tests (required)
+Rules:
+- Every change to services/ requires unit tests covering:
+  - happy path
+  - at least one edge case
+  - at least one error or exception path
+- Every change to core/ utilities requires unit tests.
+- Unit tests may mock:
+  - repos when testing services
+  - time, uuid, randomness, or external integrations
+- Unit tests must not:
+  - touch the database
+  - start an HTTP server
+  - perform network I/O
+
+Do NOT unit test:
+- Routers (covered via integration tests).
+- SQLAlchemy internals unless the code is pure query-building.
+
+### 8.3 Integration tests (required for endpoints)
+For every API endpoint added or changed:
 - happy path
-- auth failure
+- auth failure (missing, invalid, or expired token)
 - validation failure
-- tenant isolation test
+- tenant isolation (cross-tenant access blocked)
 
----
+### 8.4 Repo / DB tests (focused)
+Write DB-backed tests only for:
+- non-trivial queries (filters, joins, ordering, pagination)
+- tenant_id enforcement
+- uniqueness or business-key behavior
+
+Avoid testing trivial CRUD plumbing.
+
+### 8.5 Definition of done (tests)
+- No tests = not done applies to:
+  - service logic
+  - endpoint changes
+  - complex repository queries
+- Tests must pass locally and in CI.
+
+================================================================
 
 ## 9. Error handling
-Centralized exception handlers.
-Consistent error shape:
+- Centralized exception handlers only.
+- Consistent error response shape:
 {
   "error": {
     "code": "...",
@@ -107,25 +159,25 @@ Consistent error shape:
   }
 }
 
----
+================================================================
 
 ## 10. Code quality
-- Type hints on public functions.
+- Type hints required on all public functions.
+- Prefer fixing types over introducing Any.
 - Small, readable functions.
 - Structured logging only.
-- No leftover TODOs.
+- No leftover TODOs or commented-out code.
 
----
+================================================================
 
-## 11. Required self-check
-Include in final response:
-1. Files changed
-2. How to run tests
-3. Migrations added (if any)
-4. Tenant isolation verified
-5. Auth behavior verified
+## 11. Required self-check (must be included in final response)
+1) Files changed
+2) How to run tests
+3) Migrations added (if any)
+4) Tenant isolation verified
+5) Auth behavior verified
 
----
+================================================================
 
 ## 12. Task template
 Task: Implement <feature> using strict TDD.
@@ -136,3 +188,27 @@ Steps:
 3) Add edge + tenant tests
 4) Add migration if needed
 5) Final summary + self-check
+
+================================================================
+
+## 13. Formatting, linting, and type-checking (required)
+
+Tools:
+- ruff (lint + formatting)
+- mypy (type checking)
+
+Rules:
+- Code must pass:
+  - `poetry run ruff check .`
+  - `poetry run ruff format --check .`
+  - `poetry run mypy .`
+- If modifying Python files, fix all lint and format issues introduced by the change.
+- Do not suppress rules with `# noqa` or `type: ignore` unless:
+  1) a clear justification comment is included, and
+  2) no safer refactor exists.
+
+CI expectation:
+- Lint, format, and type checks must run in CI and block merge on failure.
+
+Final response must include:
+- Lint and type-check commands run (or exact commands to run)
