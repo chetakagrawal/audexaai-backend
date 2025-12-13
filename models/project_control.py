@@ -69,10 +69,9 @@ class ProjectControlBase(BaseModel):
 class ProjectControlCreate(ProjectControlBase):
     """Schema for creating a project control.
     
-    Note: tenant_id is NOT included - it's set from membership context server-side.
+    Note: tenant_id and project_id are NOT included - they're set from context server-side.
     """
 
-    project_id: UUID
     control_id: UUID
 
 
