@@ -39,7 +39,7 @@ async def get_current_user(
         db: Database session
 
     Returns:
-        User: The authenticated user with active_tenant_id and active_role attached
+        User: The authenticated user with active_tenant_id, active_role, and active_membership_id attached
 
     Raises:
         HTTPException: If token is invalid, expired, or user not found
@@ -113,12 +113,52 @@ async def get_current_user(
                 detail="Token role does not match user tenant role",
             )
 
-        # Attach active tenant and role to user object
+        # Attach active tenant, role, and membership_id to user object
         user.active_tenant_id = tenant_id
         user.active_role = role
+        user.active_membership_id = user_tenant.id  # Store membership ID
     else:
         # Platform admin - no tenant required
         user.active_tenant_id = None
         user.active_role = None
+        user.active_membership_id = None
 
     return user
+
+
+async def get_tenancy_context(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dependency to get tenancy context for tenant-scoped operations.
+
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        TenancyContext: Tenant context with membership_id, tenant_id, and role
+
+    Raises:
+        HTTPException: 403 if user doesn't have active membership
+    """
+    # Lazy import to avoid circular dependency
+    from api.tenancy import require_membership, TenancyContext
+    
+    membership_id = getattr(current_user, "active_membership_id", None)
+    
+    if not membership_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No active membership. User must belong to a tenant.",
+        )
+
+    # Verify membership
+    membership = await require_membership(membership_id, current_user.id, db)
+
+    return TenancyContext(
+        membership_id=membership.id,
+        tenant_id=membership.tenant_id,
+        role=membership.role,
+    )
