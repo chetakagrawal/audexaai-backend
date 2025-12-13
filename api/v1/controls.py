@@ -103,9 +103,10 @@ async def create_control(
     Note: tenant_id is set from membership context (never from client input).
     """
     try:
-        # Override tenant_id from membership context (security: never trust client)
+        # Override tenant_id and created_by_membership_id from membership context (security: never trust client)
         control = Control(
             tenant_id=tenancy.tenant_id,
+            created_by_membership_id=tenancy.membership_id,
             control_code=control_data.control_code,
             name=control_data.name,
             category=control_data.category,

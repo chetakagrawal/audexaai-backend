@@ -28,6 +28,12 @@ class Project(Base):
         nullable=False,
         index=True,
     )
+    created_by_membership_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -68,5 +74,6 @@ class ProjectResponse(ProjectBase):
 
     id: UUID
     tenant_id: UUID
+    created_by_membership_id: UUID
     created_at: datetime
 
