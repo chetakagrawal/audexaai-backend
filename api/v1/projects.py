@@ -103,9 +103,10 @@ async def create_project(
     Note: tenant_id in request is ignored - uses tenant from membership context.
     """
     try:
-        # Override tenant_id from membership context (security: never trust client)
+        # Override tenant_id and created_by_membership_id from membership context (security: never trust client)
         project = Project(
             tenant_id=tenancy.tenant_id,
+            created_by_membership_id=tenancy.membership_id,
             name=project_data.name,
             status=project_data.status,
             period_start=project_data.period_start,

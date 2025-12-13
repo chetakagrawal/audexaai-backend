@@ -28,6 +28,12 @@ class Control(Base):
         nullable=False,
         index=True,
     )
+    created_by_membership_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     control_code: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -76,5 +82,6 @@ class ControlResponse(ControlBase):
 
     id: UUID
     tenant_id: UUID
+    created_by_membership_id: UUID
     created_at: datetime
 
