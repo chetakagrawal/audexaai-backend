@@ -1,0 +1,89 @@
+# Cursor Project Rules — Backend (FastAPI • Python 3.13 • Poetry • Postgres • SQLAlchemy 2.x async • Alembic • JWT)
+
+## Non-negotiables
+- **TDD is mandatory:** Write **failing tests first** (Red), implement minimum to pass (Green), then refactor (Refactor).
+- **No “done” without tests:** Every new behavior and every bugfix includes tests.
+- **No backward-compat requirement in dev mode:** It’s OK to change endpoints/contracts while iterating, but tests must reflect the current contract.
+
+## Architecture & Layering
+- Keep strict layers:
+  - `api/` → routers, request/response schemas, auth dependencies
+  - `services/` → business logic (no HTTP concerns)
+  - `repos/` → DB access only (no business rules)
+  - `models/` → SQLAlchemy models
+  - `schemas/` → Pydantic models (DTOs)
+  - `core/` → config, logging, security utils
+- Routers call services; services call repos; repos use SQLAlchemy async session.
+- **No DB calls in routers** (except dependency wiring).
+
+## Database (SQLAlchemy async) rules
+- SQLAlchemy 2.x async only: `AsyncSession`, `async_sessionmaker`, `select()`.
+- Use explicit transactions for multi-step writes.
+- Always close sessions via dependency injection pattern.
+- Add appropriate indexes for common queries (e.g., `(tenant_id, id)`; `(tenant_id, <business_key>)` where applicable).
+
+## Multi-tenant safety
+- Every query that touches tenant data must be scoped by `tenant_id` unless explicitly platform-admin.
+- Never accept `tenant_id` from request body for authorization decisions—derive from JWT claims/auth context.
+- Add **tests that prove cross-tenant access is impossible** for each relevant endpoint/service.
+
+## Auth/JWT rules (python-jose)
+- JWT verify/sign logic lives in `core/security.py` (or equivalent).
+- Never log tokens, secrets, or sensitive claims.
+- Add tests for:
+  - valid token access
+  - missing/invalid token rejected
+  - expired token rejected
+  - cross-tenant access blocked
+  - platform-admin allowed behavior (if implemented)
+
+## Alembic rules
+- Any model change requires a migration.
+- Migrations must be reversible (downgrade supported).
+- Verify models and migrations match (no drift).
+
+## Error handling & API behavior
+- Convert domain exceptions to HTTP errors in a centralized handler (FastAPI exception handlers).
+- Error format must be consistent:
+  - `{ "error": { "code": "...", "message": "...", "details": ... } }`
+- Don’t leak internal stack traces to clients.
+
+## Testing (pytest + pytest-asyncio + httpx)
+- Use `pytest` + `pytest-asyncio`.
+- Route tests should use `httpx.AsyncClient` against the FastAPI app.
+- Use an ephemeral DB for tests (preferred: Testcontainers Postgres; otherwise a dedicated test DB).
+- Tests must be deterministic: no real network; freeze time when relevant.
+- For every meaningful change, include at least:
+  - 1 happy path
+  - 2+ edge cases
+  - 1 failure path (validation/auth/db error)
+  - tenant isolation test (where applicable)
+
+## Code quality
+- Type hints on public functions and core logic.
+- Small functions, explicit logic, readable code.
+- Use structured logging (no `print`).
+- No leftover TODOs unless explicitly requested.
+
+## Required “self-check” before final response
+In your final response, include:
+1) **Files changed**
+2) **How to run tests:** `poetry run pytest -q`
+3) **Migrations added** (if any) and how to apply
+4) Quick checklist:
+   - Top 3 failure modes
+   - Edge cases tested
+   - Tenant isolation verified
+   - Auth behavior verified
+
+---
+
+## Task Template (copy/paste for each feature)
+**Task:** Implement <feature> using strict TDD.  
+**Constraints:** FastAPI + async SQLAlchemy + Alembic + JWT. No backward-compat needed in dev.  
+**Steps:**  
+1) Add failing tests first (route tests + service tests as needed).  
+2) Implement minimal code to pass.  
+3) Add edge/failure + tenant isolation tests (if applicable).  
+4) Add migration if models changed.  
+5) Provide final summary + self-check.
