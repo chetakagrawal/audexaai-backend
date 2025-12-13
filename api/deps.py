@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from sqlalchemy import select
@@ -129,32 +129,43 @@ async def get_current_user(
 async def get_tenancy_context(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    x_membership_id: str | None = Header(None, alias="X-Membership-Id"),
 ):
     """
     Dependency to get tenancy context for tenant-scoped operations.
+    
+    Reads X-Membership-Id header to determine active membership.
 
     Args:
         current_user: Current authenticated user
         db: Database session
+        x_membership_id: X-Membership-Id header value (UserTenant.id)
 
     Returns:
         TenancyContext: Tenant context with membership_id, tenant_id, and role
 
     Raises:
-        HTTPException: 403 if user doesn't have active membership
+        HTTPException: 403 if header is missing or membership is invalid
     """
     # Lazy import to avoid circular dependency
     from api.tenancy import require_membership, TenancyContext
     
-    membership_id = getattr(current_user, "active_membership_id", None)
-    
-    if not membership_id:
+    # Require X-Membership-Id header for tenant-scoped endpoints
+    if not x_membership_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No active membership. User must belong to a tenant.",
+            detail="X-Membership-Id header is required for tenant-scoped operations",
+        )
+    
+    try:
+        membership_id = UUID(x_membership_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid X-Membership-Id format (must be UUID)",
         )
 
-    # Verify membership
+    # Verify membership belongs to the authenticated user
     membership = await require_membership(membership_id, current_user.id, db)
 
     return TenancyContext(

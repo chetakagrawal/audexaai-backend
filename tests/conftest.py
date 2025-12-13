@@ -96,6 +96,23 @@ async def tenant_b(db_session):
     return tenant
 
 
+def make_auth_headers(token: str, membership_id: str | None = None) -> dict:
+    """
+    Helper function to create auth headers with optional X-Membership-Id.
+    
+    Args:
+        token: JWT token
+        membership_id: Optional membership ID (UserTenant.id)
+    
+    Returns:
+        Headers dict with Authorization and optionally X-Membership-Id
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    if membership_id:
+        headers["X-Membership-Id"] = str(membership_id)
+    return headers
+
+
 @pytest_asyncio.fixture
 async def user_tenant_a(db_session, tenant_a):
     """Create user in Tenant A."""

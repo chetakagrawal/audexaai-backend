@@ -35,7 +35,10 @@ async def test_user_tenant_a_cannot_access_tenant_b_project(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Test 1: List projects - should only see Tenant A's projects (empty for now)
     response = client.get("/api/v1/projects", headers=headers)
@@ -75,7 +78,10 @@ async def test_user_tenant_a_cannot_access_tenant_b_control(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Test 1: List controls - should only see Tenant A's controls (empty for now)
     response = client.get("/api/v1/controls", headers=headers)
@@ -113,7 +119,10 @@ async def test_user_can_create_project_in_own_tenant(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Create project (tenant_id in request should be ignored)
     project_data = {
@@ -160,7 +169,10 @@ async def test_user_can_create_control_in_own_tenant(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Create control (tenant_id in request should be ignored)
     control_data = {
@@ -212,7 +224,10 @@ async def test_user_cannot_access_other_tenant_project_after_creation(
         is_platform_admin=False,
     )
     
-    headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_b = {
+        "Authorization": f"Bearer {token_b}",
+        "X-Membership-Id": str(membership_b.id),
+    }
     project_data_b = {
         "name": "Tenant B Project",
         "status": "draft",
@@ -231,7 +246,10 @@ async def test_user_cannot_access_other_tenant_project_after_creation(
         is_platform_admin=False,
     )
     
-    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_a = {
+        "Authorization": f"Bearer {token_a}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Should return 404, not 403 (tenant filtering makes it "not found")
     response = client.get(f"/api/v1/projects/{project_b_id}", headers=headers_a)

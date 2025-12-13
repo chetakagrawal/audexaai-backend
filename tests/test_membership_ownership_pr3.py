@@ -24,7 +24,10 @@ async def test_project_creation_sets_created_by_membership_id(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     project_data = {"name": "Test Project", "status": "draft"}
     
     response = client.post("/api/v1/projects", json=project_data, headers=headers)
@@ -54,7 +57,10 @@ async def test_control_creation_sets_created_by_membership_id(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     control_data = {
         "control_code": "AC-001",
         "name": "Test Control",
@@ -91,7 +97,10 @@ async def test_project_created_by_membership_belongs_to_tenant(
         is_platform_admin=False,
     )
     
-    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_a = {
+        "Authorization": f"Bearer {token_a}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     project_data = {"name": "Tenant A Project", "status": "draft"}
     
     response = client.post("/api/v1/projects", json=project_data, headers=headers_a)
@@ -126,7 +135,10 @@ async def test_cross_tenant_membership_rejection(
         is_platform_admin=False,
     )
     
-    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_a = {
+        "Authorization": f"Bearer {token_a}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Try to create project with Tenant B's membership (should be impossible via API)
     # But if someone tries to do it directly in DB, FK constraint should prevent it
@@ -159,7 +171,10 @@ async def test_list_projects_includes_created_by_membership_id(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Create a project
     project_data = {"name": "Test Project", "status": "draft"}
