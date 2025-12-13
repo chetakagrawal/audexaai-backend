@@ -30,7 +30,10 @@ async def test_user_tenant_a_cannot_see_tenant_b_resources(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Test 1: User A tries to list tenants - should only see Tenant A
     response = client.get("/api/v1/tenants", headers=headers)
@@ -74,6 +77,8 @@ async def test_user_without_membership_cannot_access_tenant_scoped_endpoints(
     )
     
     headers = {"Authorization": f"Bearer {token}"}
+    # Note: No X-Membership-Id header - this test verifies the old behavior
+    # where token without tenant_id fails
     
     # Should fail because non-platform admin must have tenant_id
     response = client.get("/api/v1/tenants", headers=headers)
@@ -103,7 +108,10 @@ async def test_user_cannot_access_other_tenant_by_id_guessing(
         is_platform_admin=False,
     )
     
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # List tenants - should only return Tenant A
     response = client.get("/api/v1/tenants", headers=headers)

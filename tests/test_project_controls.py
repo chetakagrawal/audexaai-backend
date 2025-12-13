@@ -24,7 +24,10 @@ async def test_create_project_control_success(
         role=membership_a.role,
         is_platform_admin=False,
     )
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     project_data = {"name": "Test Project", "status": "draft"}
     project_response = client.post("/api/v1/projects", json=project_data, headers=headers)
@@ -88,7 +91,10 @@ async def test_list_project_controls_success(
         role=membership_a.role,
         is_platform_admin=False,
     )
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Create project
     project_data = {"name": "Test Project", "status": "draft"}
@@ -149,7 +155,10 @@ async def test_tenant_isolation_project_controls(
         role=membership_a.role,
         is_platform_admin=False,
     )
-    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_a = {
+        "Authorization": f"Bearer {token_a}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     project_data_a = {"name": "Tenant A Project", "status": "draft"}
     project_response = client.post("/api/v1/projects", json=project_data_a, headers=headers_a)
@@ -181,7 +190,10 @@ async def test_tenant_isolation_project_controls(
         role=membership_b.role,
         is_platform_admin=False,
     )
-    headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_b = {
+        "Authorization": f"Bearer {token_b}",
+        "X-Membership-Id": str(membership_b.id),
+    }
     
     # Should return 404 (project not found in Tenant B) or empty list
     response = client.get(
@@ -215,7 +227,10 @@ async def test_cannot_attach_control_from_different_tenant(
         role=membership_a.role,
         is_platform_admin=False,
     )
-    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_a = {
+        "Authorization": f"Bearer {token_a}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     project_data = {"name": "Tenant A Project", "status": "draft"}
     project_response = client.post("/api/v1/projects", json=project_data, headers=headers_a)
@@ -229,7 +244,10 @@ async def test_cannot_attach_control_from_different_tenant(
         role=membership_b.role,
         is_platform_admin=False,
     )
-    headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_b = {
+        "Authorization": f"Bearer {token_b}",
+        "X-Membership-Id": str(membership_b.id),
+    }
     
     control_data = {
         "control_code": "AC-001",
@@ -274,7 +292,10 @@ async def test_project_control_idempotency(
         role=membership_a.role,
         is_platform_admin=False,
     )
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
     
     # Create project and control
     project_data = {"name": "Test Project", "status": "draft"}

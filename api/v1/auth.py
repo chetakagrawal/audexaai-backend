@@ -28,6 +28,15 @@ class DevLoginRequest(BaseModel):
     role: str = "admin"
 
 
+class MembershipInfo(BaseModel):
+    """Schema for membership information in login response."""
+
+    membership_id: str  # UserTenant.id
+    tenant_id: str
+    tenant_name: str
+    role: str
+
+
 class DevLoginResponse(BaseModel):
     """Response schema for dev login."""
 
@@ -37,6 +46,7 @@ class DevLoginResponse(BaseModel):
     tenant_id: str | None
     role: str
     is_platform_admin: bool
+    memberships: list[MembershipInfo]  # List of all user memberships
 
 
 @router.post("/auth/dev-login", response_model=DevLoginResponse)
@@ -169,10 +179,27 @@ async def dev_login(
         is_platform_admin=user.is_platform_admin,
     )
 
+    # Get all memberships for this user
+    result = await db.execute(
+        select(UserTenant, Tenant).join(Tenant).where(UserTenant.user_id == user.id)
+    )
+    membership_rows = result.all()
+
+    memberships = [
+        MembershipInfo(
+            membership_id=str(membership.id),
+            tenant_id=str(membership.tenant_id),
+            tenant_name=tenant_row.name,
+            role=membership.role,
+        )
+        for membership, tenant_row in membership_rows
+    ]
+
     return DevLoginResponse(
         access_token=access_token,
         user_id=str(user.id),
         tenant_id=str(tenant.id),
         role=user_tenant.role,
         is_platform_admin=user.is_platform_admin,
+        memberships=memberships,
     )
