@@ -126,6 +126,12 @@ class SignupCreateResponse(BaseModel):
     status: str
 
 
+class SignupRejectRequest(BaseModel):
+    """Schema for rejecting a signup."""
+
+    reason: Optional[str] = None
+
+
 class SignupResponse(SignupBase):
     """Schema for signup response."""
 
@@ -135,4 +141,6 @@ class SignupResponse(SignupBase):
     status: str
     created_at: datetime
     updated_at: datetime
+    approved_at: Optional[datetime] = None
+    promoted_at: Optional[datetime] = None
 
