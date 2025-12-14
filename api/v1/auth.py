@@ -47,6 +47,8 @@ class DevLoginResponse(BaseModel):
     role: str
     is_platform_admin: bool
     memberships: list[MembershipInfo]  # List of all user memberships
+    default_membership_id: str | None  # ID of default membership (where is_default=true)
+    next_url: str  # Next URL to navigate to after login
 
 
 @router.post("/auth/dev-login", response_model=DevLoginResponse)
@@ -181,7 +183,10 @@ async def dev_login(
 
     # Get all memberships for this user
     result = await db.execute(
-        select(UserTenant, Tenant).join(Tenant).where(UserTenant.user_id == user.id)
+        select(UserTenant, Tenant)
+        .join(Tenant, UserTenant.tenant_id == Tenant.id)
+        .where(UserTenant.user_id == user.id)
+        .order_by(UserTenant.created_at.desc())
     )
     membership_rows = result.all()
 
@@ -195,6 +200,19 @@ async def dev_login(
         for membership, tenant_row in membership_rows
     ]
 
+    # Determine default_membership_id from the membership where is_default=true
+    # If multiple, pick the most recent (already ordered by created_at desc)
+    default_membership_id = None
+    for membership, _ in membership_rows:
+        if membership.is_default:
+            default_membership_id = str(membership.id)
+            break
+
+    # Set next_url based on whether user has at least one membership
+    # UI should: login → store JWT → call /api/v1/me/memberships →
+    # pick default_membership_id and send as X-Membership-Id on tenant-scoped calls → navigate to next_url
+    next_url = "/portal/dashboard" if len(memberships) > 0 else "/no-access"
+
     return DevLoginResponse(
         access_token=access_token,
         user_id=str(user.id),
@@ -202,4 +220,6 @@ async def dev_login(
         role=user_tenant.role,
         is_platform_admin=user.is_platform_admin,
         memberships=memberships,
+        default_membership_id=default_membership_id,
+        next_url=next_url,
     )
