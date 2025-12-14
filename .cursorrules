@@ -96,7 +96,8 @@ Required tests:
 
 ### 8.0 Default pyramid
 - services/ + core/: unit tests (primary confidence)
-- api/: integration tests via httpx.AsyncClient
+- api/: integration tests via httpx.AsyncClient + unit tests in `tests/unit_tests/`
+- models/: DB-backed tests in `tests/models/` (required for all new models)
 - repos/: DB-backed tests only for non-trivial queries and tenant enforcement
 
 ### 8.1 Tooling
@@ -131,7 +132,38 @@ For every API endpoint added or changed:
 - validation failure
 - tenant isolation (cross-tenant access blocked)
 
-### 8.4 Repo / DB tests (focused)
+**Note**: Integration tests test the full HTTP request/response cycle via `httpx.AsyncClient`.
+These tests verify the complete endpoint behavior including routing, auth, validation, and responses.
+
+### 8.4 Unit tests for endpoints (required for new endpoints)
+**Location**: All endpoint unit tests must be in `tests/unit_tests/` directory.
+
+**File naming**: `tests/unit_tests/test_<endpoint_name>_<http_method>.py` or `test_<router_name>_endpoints.py`
+(e.g., `test_signup_post.py` or `test_signup_endpoints.py` for signup endpoints)
+
+**Required when adding a new endpoint**:
+Every new API endpoint requires unit tests covering:
+- Handler function logic (if extracted from router)
+- Request validation and parsing
+- Response serialization
+- Error handling and exception paths
+- Business logic specific to the endpoint (if not in services/)
+- Edge cases in request processing
+
+**Test structure**:
+- Mock dependencies (database, services, auth, etc.)
+- Test handler/endpoint functions in isolation
+- Use `pytest` with standard fixtures
+- Do NOT start HTTP server or make real network calls
+- Focus on testing the endpoint's business logic and validation
+
+**Separation from integration tests**:
+- **Unit tests** (`tests/unit_tests/`): Test endpoint logic in isolation with mocks
+- **Integration tests** (root `tests/`): Test full HTTP request/response via `httpx.AsyncClient`
+
+**Do NOT create an endpoint without both unit AND integration tests** - No tests = not done.
+
+### 8.5 Repo / DB tests (focused)
 Write DB-backed tests only for:
 - non-trivial queries (filters, joins, ordering, pagination)
 - tenant_id enforcement
@@ -139,8 +171,33 @@ Write DB-backed tests only for:
 
 Avoid testing trivial CRUD plumbing.
 
-### 8.5 Definition of done (tests)
+### 8.6 Model tests (required for new models)
+**Location**: All model tests must be in `tests/models/` directory.
+
+**File naming**: `tests/models/test_<model_name>.py` (e.g., `test_signup.py` for Signup model)
+
+**Required when adding a new model**:
+Every new SQLAlchemy model requires DB-backed tests covering:
+- Minimal creation (required fields only)
+- Full field population (all optional fields)
+- Field defaults and nullable behavior
+- Database constraints (unique, foreign keys, etc.)
+- Query patterns for indexed fields
+- Relationships (if applicable)
+- Timestamp behavior (created_at, updated_at)
+
+**Test structure**:
+- Use `db_session` fixture from `tests/conftest.py`
+- Tests use real database session (DB-backed, not unit tests)
+- Follow pattern: Create → Verify → Query → Assert
+- See `tests/models/test_signup.py` as reference implementation
+
+**Do NOT create a model without tests** - No tests = not done.
+
+### 8.7 Definition of done (tests)
 - No tests = not done applies to:
+  - **new models** (must include tests in `tests/models/`)
+  - **new endpoints** (must include both unit tests in `tests/unit_tests/` AND integration tests)
   - service logic
   - endpoint changes
   - complex repository queries

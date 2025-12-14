@@ -10,6 +10,7 @@ from models.auth_identity import AuthIdentity
 from models.project import Project
 from models.control import Control
 from models.project_control import ProjectControl
+from models.signup import Signup
 
 __all__ = [
     "Base",
@@ -20,5 +21,6 @@ __all__ = [
     "Project",
     "Control",
     "ProjectControl",
+    "Signup",
 ]
 
