@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db
 from api.v1.admin.utils import ensure_unique_slug, generate_slug
+from api.v1.setup import create_setup_token, send_setup_email_stub
 from models.auth_identity import AuthIdentity
 from models.signup import (
     AuthMode,
@@ -398,6 +399,20 @@ async def promote_signup(
         signup.tenant_id = tenant.id
         signup.user_id = user.id
         signup.membership_id = membership.id
+        
+        # 6. If SSO user, generate setup token and send email (stub)
+        setup_token_str = None
+        if signup.requested_auth_mode == AuthMode.SSO.value:
+            setup_token = await create_setup_token(
+                db=db,
+                user_id=user.id,
+                signup_id=signup.id,
+                expires_in_days=7,
+            )
+            setup_token_str = setup_token.token
+            
+            # Stub: Send email with setup link (logs to console for now)
+            send_setup_email_stub(email=email_lower, token=setup_token_str)
         
         # Commit transaction
         await db.commit()

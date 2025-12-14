@@ -11,6 +11,8 @@ from models.project import Project
 from models.control import Control
 from models.project_control import ProjectControl
 from models.signup import Signup
+from models.setup_token import SetupToken
+from models.tenant_sso_config import TenantSSOConfig
 
 __all__ = [
     "Base",
@@ -22,5 +24,7 @@ __all__ = [
     "Control",
     "ProjectControl",
     "Signup",
+    "SetupToken",
+    "TenantSSOConfig",
 ]
 
