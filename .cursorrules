@@ -96,7 +96,7 @@ Required tests:
 
 ### 8.0 Default pyramid
 - services/ + core/: unit tests (primary confidence)
-- api/: integration tests via httpx.AsyncClient + unit tests in `tests/unit_tests/`
+- api/: integration tests in `tests/integration/` + unit tests in `tests/unit_tests/`
 - models/: DB-backed tests in `tests/models/` (required for all new models)
 - repos/: DB-backed tests only for non-trivial queries and tenant enforcement
 
@@ -131,6 +131,8 @@ For every API endpoint added or changed:
 - auth failure (missing, invalid, or expired token)
 - validation failure
 - tenant isolation (cross-tenant access blocked)
+
+**Location**: All endpoint integration tests must be in `tests/integration/` directory.
 
 **Note**: Integration tests test the full HTTP request/response cycle via `httpx.AsyncClient`.
 These tests verify the complete endpoint behavior including routing, auth, validation, and responses.
@@ -197,7 +199,7 @@ Every new SQLAlchemy model requires DB-backed tests covering:
 ### 8.7 Definition of done (tests)
 - No tests = not done applies to:
   - **new models** (must include tests in `tests/models/`)
-  - **new endpoints** (must include both unit tests in `tests/unit_tests/` AND integration tests)
+  - **new endpoints** (must include both unit tests in `tests/unit_tests/` AND integration tests in `tests/integration/`)
   - service logic
   - endpoint changes
   - complex repository queries

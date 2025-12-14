@@ -32,7 +32,7 @@ poetry run pytest tests/unit_tests/test_signup_endpoints.py -v
 ### Notes
 - These are **unit tests** that mock all dependencies
 - These are **NOT** integration tests (which test full HTTP request/response)
-- Integration tests for endpoints are in the root `tests/` directory
+- Integration tests for endpoints are in `tests/integration/` directory
 - These tests do NOT start an HTTP server or make network calls
 
 ## Separation from Integration Tests
@@ -43,7 +43,7 @@ poetry run pytest tests/unit_tests/test_signup_endpoints.py -v
 - Focus on logic, validation, error handling
 - Fast execution, no external dependencies
 
-### Integration Tests (root `tests/`)
+### Integration Tests (`tests/integration/`)
 - Test full HTTP request/response cycle
 - Use `httpx.AsyncClient` to call actual endpoints
 - Test routing, auth middleware, serialization
