@@ -2,15 +2,26 @@
 
 from datetime import datetime, UTC
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db
-from models.signup import Signup, SignupRejectRequest, SignupResponse, SignupStatus
+from api.v1.admin.utils import ensure_unique_slug, generate_slug
+from models.auth_identity import AuthIdentity
+from models.signup import (
+    AuthMode,
+    Signup,
+    SignupPromoteResponse,
+    SignupRejectRequest,
+    SignupResponse,
+    SignupStatus,
+)
+from models.tenant import Tenant
 from models.user import User
+from models.user_tenant import UserTenant
 
 router = APIRouter()
 
@@ -207,4 +218,155 @@ async def reject_signup(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reject signup: {str(e)}",
+        )
+
+
+@router.post("/admin/signups/{signup_id}/promote", response_model=SignupPromoteResponse)
+async def promote_signup(
+    signup_id: UUID,
+    _platform_admin: None = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Promote a signup to create tenant, user, membership, and auth identity.
+    
+    This endpoint is idempotent - if signup is already promoted, returns existing IDs.
+    Requires signup status to be 'approved' or 'verified'.
+    All operations run in a single database transaction for safety.
+    
+    Args:
+        signup_id: ID of the signup to promote
+        _platform_admin: Dependency that ensures user is platform admin
+        db: Database session
+    
+    Returns:
+        SignupPromoteResponse: Created tenant_id, user_id, membership_id, and status
+    
+    Raises:
+        HTTPException: 404 if signup not found, 400 if status invalid
+    """
+    try:
+        # Load signup
+        result = await db.execute(
+            select(Signup).where(Signup.id == signup_id)
+        )
+        signup = result.scalar_one_or_none()
+        
+        if not signup:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Signup not found",
+            )
+        
+        # Check if already promoted (idempotency)
+        if signup.status == SignupStatus.PROMOTED.value:
+            if signup.tenant_id and signup.user_id and signup.membership_id:
+                return SignupPromoteResponse(
+                    tenant_id=signup.tenant_id,
+                    user_id=signup.user_id,
+                    membership_id=signup.membership_id,
+                    status=signup.status,
+                )
+        
+        # Require status to be approved or verified
+        if signup.status not in [SignupStatus.APPROVED.value, SignupStatus.VERIFIED.value]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Signup must be approved or verified to promote. Current status: {signup.status}",
+            )
+        
+        email_lower = signup.email.lower()
+        email_local = email_lower.split("@")[0]
+        
+        # 1. Create or get Tenant
+        tenant_name = signup.company_name
+        if not tenant_name:
+            # Fallback to email local-part + "Workspace"
+            tenant_name = f"{email_local.title()} Workspace"
+        
+        base_slug = generate_slug(tenant_name)
+        tenant_slug = await ensure_unique_slug(db, base_slug)
+        
+        tenant = Tenant(
+            id=uuid4(),
+            name=tenant_name,
+            slug=tenant_slug,
+            status="active",
+        )
+        db.add(tenant)
+        await db.flush()  # Flush to get tenant.id
+        
+        # 2. Upsert User by primary_email (case-insensitive check)
+        result = await db.execute(
+            select(User).where(User.primary_email == email_lower)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            user_name = signup.full_name or email_local.title()
+            user = User(
+                id=uuid4(),
+                primary_email=email_lower,
+                name=user_name,
+                is_platform_admin=False,
+                is_active=True,
+            )
+            db.add(user)
+            await db.flush()  # Flush to get user.id
+        
+        # 3. Create UserTenant membership
+        membership = UserTenant(
+            id=uuid4(),
+            user_id=user.id,
+            tenant_id=tenant.id,
+            role="owner",
+            is_default=True,
+        )
+        db.add(membership)
+        await db.flush()  # Flush to get membership.id
+        
+        # 4. Create AuthIdentity placeholder
+        if signup.requested_auth_mode == AuthMode.SSO.value:
+            provider = "oidc"
+            # Mark SSO as not configured in metadata
+            if signup.signup_metadata is None:
+                signup.signup_metadata = {}
+            signup.signup_metadata["sso_status"] = "not_configured"
+        else:
+            provider = "dev"
+        
+        auth_identity = AuthIdentity(
+            id=uuid4(),
+            user_id=user.id,
+            provider=provider,
+            provider_subject=email_lower,
+            email=email_lower,
+            email_verified=False,  # Will be verified after SSO setup or password setup
+        )
+        db.add(auth_identity)
+        
+        # 5. Update signup
+        signup.status = SignupStatus.PROMOTED.value
+        signup.promoted_at = datetime.now(UTC)
+        signup.tenant_id = tenant.id
+        signup.user_id = user.id
+        signup.membership_id = membership.id
+        
+        # Commit transaction
+        await db.commit()
+        await db.refresh(signup)
+        
+        return SignupPromoteResponse(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            membership_id=membership.id,
+            status=signup.status,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to promote signup: {str(e)}",
         )
