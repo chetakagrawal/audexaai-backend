@@ -84,7 +84,25 @@ async def list_signups(
         result = await db.execute(query)
         signups = result.scalars().all()
         
-        return signups
+        # Convert to SignupResponse list to ensure metadata field is included
+        return [
+            SignupResponse(
+                id=signup.id,
+                email=signup.email,
+                full_name=signup.full_name,
+                company_name=signup.company_name,
+                company_domain=signup.company_domain,
+                requested_auth_mode=signup.requested_auth_mode,
+                status=signup.status,
+                created_at=signup.created_at,
+                updated_at=signup.updated_at,
+                approved_at=signup.approved_at,
+                rejected_at=signup.rejected_at,
+                promoted_at=signup.promoted_at,
+                metadata=signup.signup_metadata,  # Map signup_metadata to metadata
+            )
+            for signup in signups
+        ]
     except HTTPException:
         raise
     except Exception as e:
@@ -143,7 +161,21 @@ async def approve_signup(
         await db.commit()
         await db.refresh(signup)
         
-        return signup
+        # Convert to SignupResponse to ensure metadata field is included
+        return SignupResponse(
+            id=signup.id,
+            email=signup.email,
+            full_name=signup.full_name,
+            company_name=signup.company_name,
+            company_domain=signup.company_domain,
+            requested_auth_mode=signup.requested_auth_mode,
+            status=signup.status,
+            created_at=signup.created_at,
+            updated_at=signup.updated_at,
+            approved_at=signup.approved_at,
+            promoted_at=signup.promoted_at,
+            metadata=signup.signup_metadata,  # Map signup_metadata to metadata
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -200,6 +232,7 @@ async def reject_signup(
         
         # Update signup
         signup.status = SignupStatus.REJECTED.value
+        signup.rejected_at = datetime.now(UTC)
         
         # Update metadata with rejection reason if provided
         if reject_data.reason:
@@ -210,7 +243,21 @@ async def reject_signup(
         await db.commit()
         await db.refresh(signup)
         
-        return signup
+        # Convert to SignupResponse to ensure metadata field is included
+        return SignupResponse(
+            id=signup.id,
+            email=signup.email,
+            full_name=signup.full_name,
+            company_name=signup.company_name,
+            company_domain=signup.company_domain,
+            requested_auth_mode=signup.requested_auth_mode,
+            status=signup.status,
+            created_at=signup.created_at,
+            updated_at=signup.updated_at,
+            approved_at=signup.approved_at,
+            promoted_at=signup.promoted_at,
+            metadata=signup.signup_metadata,  # Map signup_metadata to metadata
+        )
     except HTTPException:
         raise
     except Exception as e:

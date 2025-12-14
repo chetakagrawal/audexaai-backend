@@ -4,7 +4,7 @@ from datetime import datetime, UTC
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import String, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
@@ -59,8 +59,12 @@ class Signup(Base):
     )
     signup_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     
-    # Promotion tracking
+    # Status tracking timestamps
     approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -153,5 +157,7 @@ class SignupResponse(SignupBase):
     created_at: datetime
     updated_at: datetime
     approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
     promoted_at: Optional[datetime] = None
+    metadata: Optional[dict] = None  # Includes rejection_reason when signup is rejected
 
