@@ -114,7 +114,16 @@ class SignupBase(BaseModel):
 class SignupCreate(SignupBase):
     """Schema for creating a signup."""
 
-    pass
+    metadata: Optional[dict] = None
+
+
+class SignupCreateResponse(BaseModel):
+    """Simple response schema for signup creation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    status: str
 
 
 class SignupResponse(SignupBase):
