@@ -132,6 +132,17 @@ class SignupRejectRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class SignupPromoteResponse(BaseModel):
+    """Response schema for signup promotion."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    tenant_id: UUID
+    user_id: UUID
+    membership_id: UUID
+    status: str
+
+
 class SignupResponse(SignupBase):
     """Schema for signup response."""
 
