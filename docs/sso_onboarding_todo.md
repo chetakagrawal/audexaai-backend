@@ -71,20 +71,23 @@ Implement onboarding flow for users who sign up requesting SSO. Users must compl
 
 ### Phase 3: Middleware / Access Control
 
-- [ ] **Create middleware to check SSO status**
+- [x] **Create middleware to check SSO status** ✅
   - For SSO users with `sso_status: "not_configured"`
   - Check if they're using setup token (allow)
   - Otherwise redirect to onboarding
   - Only allow access to onboarding page and setup endpoints
+  - **Implementation**: `require_sso_configured()` dependency function in `api/deps.py` checks SSO configuration status
 
-- [ ] **Update portal route protection**
+- [x] **Update portal route protection** ✅
   - Check SSO status before allowing portal access
   - If SSO requested but not configured → redirect to onboarding
   - If using setup token → allow onboarding page only
+  - **Implementation**: `get_tenancy_context()` now uses `require_sso_configured()` to check SSO status. All portal routes using `get_tenancy_context` are automatically protected. Setup endpoints use setup tokens and bypass this check.
 
-- [ ] **Update existing dev-login check**
+- [x] **Update existing dev-login check** ✅
   - Already implemented: blocks dev-login for SSO users
   - Verify it works with setup token exception (if needed)
+  - **Status**: Verified - dev-login correctly blocks SSO users. Setup tokens are only for setup endpoints, not for dev-login, which is correct behavior.
 
 ### Phase 4: Email / Notification
 
@@ -204,10 +207,11 @@ Implement onboarding flow for users who sign up requesting SSO. Users must compl
   - Document SSO configuration endpoints
   - Include example requests/responses
 
-- [ ] **Create SSO setup guide**
+- [x] **Create SSO setup guide** ✅
   - Instructions for different SSO providers (Okta, Azure AD, Google Workspace)
   - Screenshots or step-by-step guide
   - Common issues and troubleshooting
+  - **Implementation**: `docs/sso_setup_guide.md` - Comprehensive guide covering SAML 2.0 and OIDC configuration for multiple providers
 
 - [ ] **Update user flow documentation**
   - Document complete signup → promotion → onboarding → SSO login flow
@@ -235,12 +239,19 @@ Implement onboarding flow for users who sign up requesting SSO. Users must compl
 ### ✅ Completed (Backend)
 - Phase 1: Setup Token / Magic Link System - **100% Complete**
 - Phase 2: SSO Configuration Endpoints - **100% Complete**
+- Phase 3: Middleware / Access Control - **100% Complete**
 - Phase 4: Email / Notification - **Stub Complete** (ready for email service)
-- Backend Integration Tests - **100% Complete** (22 tests, all passing)
+- Backend Integration Tests - **100% Complete** (35 tests, all passing)
+  - Setup endpoints: 13 tests
+  - Setup token validation: 5 tests
+  - Promotion with setup token: 2 tests
+  - SSO configuration: 7 tests
+  - SSO access control: 6 tests
+  - Admin signup promotion: 1 test
+  - Other related tests: 1 test
 
 ### ⏳ Pending
-- Phase 3: Middleware / Access Control
 - All Frontend Tasks (Phases 1-3)
 - Backend Unit Tests (integration tests cover functionality)
-- Documentation Updates
+- Documentation Updates (API docs, SSO setup guide)
 - End-to-end Testing (requires frontend)

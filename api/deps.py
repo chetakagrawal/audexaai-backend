@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import config
 from auth.jwt import decode_token
 from db import get_db as get_db_session
+from models.signup import Signup, AuthMode
 from models.user import User
 from models.user_tenant import UserTenant
 
@@ -126,8 +127,56 @@ async def get_current_user(
     return user
 
 
-async def get_tenancy_context(
+async def require_sso_configured(
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Dependency to ensure SSO is configured for SSO users before accessing portal routes.
+    
+    For users who requested SSO authentication:
+    - If SSO is not configured (sso_status != "configured"), raises 403 error
+    - If SSO is configured or user is direct auth, allows access
+    
+    Setup endpoints use setup tokens, so they bypass this check.
+    
+    Args:
+        current_user: Current authenticated user (from get_current_user)
+        db: Database session
+    
+    Returns:
+        User: The authenticated user (if SSO is configured or user is not SSO)
+    
+    Raises:
+        HTTPException: 403 if SSO is requested but not configured
+    """
+    # Find user's signup record
+    result = await db.execute(
+        select(Signup).where(
+            Signup.email == current_user.primary_email,
+            Signup.status == "promoted"  # Only check promoted signups
+        ).order_by(Signup.created_at.desc())
+    )
+    signup = result.scalar_one_or_none()
+    
+    # If user has a signup that requested SSO
+    if signup and signup.requested_auth_mode == AuthMode.SSO.value:
+        # Check SSO configuration status
+        sso_status = signup.signup_metadata.get("sso_status") if signup.signup_metadata else None
+        
+        # If SSO is not configured, block access
+        if sso_status != "configured":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="SSO configuration required. Please complete SSO setup before accessing the portal. Redirect to: /onboarding",
+                headers={"X-Requires-SSO-Setup": "true"},
+            )
+    
+    return current_user
+
+
+async def get_tenancy_context(
+    current_user: User = Depends(require_sso_configured),  # Check SSO status before allowing portal access
     db: AsyncSession = Depends(get_db),
     x_membership_id: str | None = Header(None, alias="X-Membership-Id"),
 ):
@@ -135,6 +184,9 @@ async def get_tenancy_context(
     Dependency to get tenancy context for tenant-scoped operations.
     
     Reads X-Membership-Id header to determine active membership.
+    
+    Also checks SSO configuration status - SSO users must complete SSO setup before accessing portal routes.
+    Setup endpoints use setup tokens and bypass this check.
 
     UI flow for tenant-scoped operations:
     1. User logs in → receives JWT token and next_url
@@ -144,7 +196,7 @@ async def get_tenancy_context(
     4. Navigate to next_url from login response
 
     Args:
-        current_user: Current authenticated user
+        current_user: Current authenticated user (checked for SSO configuration)
         db: Database session
         x_membership_id: X-Membership-Id header value (UserTenant.id)
 
@@ -152,7 +204,7 @@ async def get_tenancy_context(
         TenancyContext: Tenant context with membership_id, tenant_id, and role
 
     Raises:
-        HTTPException: 403 if header is missing or membership is invalid
+        HTTPException: 403 if header is missing, membership is invalid, or SSO is not configured
     """
     # Lazy import to avoid circular dependency
     from api.tenancy import require_membership, TenancyContext
