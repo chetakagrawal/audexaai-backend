@@ -136,6 +136,13 @@ async def get_tenancy_context(
     
     Reads X-Membership-Id header to determine active membership.
 
+    UI flow for tenant-scoped operations:
+    1. User logs in → receives JWT token and next_url
+    2. Call GET /api/v1/me/memberships → get all memberships and default_membership_id
+    3. Pick default_membership_id (or let user choose) and send it as X-Membership-Id header
+       on all tenant-scoped API calls
+    4. Navigate to next_url from login response
+
     Args:
         current_user: Current authenticated user
         db: Database session
