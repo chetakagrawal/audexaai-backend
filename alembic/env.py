@@ -10,7 +10,7 @@ import config
 from db import Base
 
 # Import all models so Alembic can detect them
-from models import Tenant, User, UserTenant, AuthIdentity, Project, Control, ProjectControl  # noqa: F401
+from models import Tenant, User, UserTenant, AuthIdentity, Project, Control, ProjectControl, Signup  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
