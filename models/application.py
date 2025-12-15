@@ -31,16 +31,16 @@ class Application(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     scope_rationale: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    business_owner_membership_id: Mapped[UUID] = mapped_column(
+    business_owner_membership_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("user_tenants.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    it_owner_membership_id: Mapped[UUID] = mapped_column(
+    it_owner_membership_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("user_tenants.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -61,8 +61,8 @@ class ApplicationBase(BaseModel):
     name: str
     category: str | None = None
     scope_rationale: str | None = None
-    business_owner_membership_id: UUID
-    it_owner_membership_id: UUID
+    business_owner_membership_id: UUID | None = None
+    it_owner_membership_id: UUID | None = None
 
 
 class ApplicationCreate(ApplicationBase):

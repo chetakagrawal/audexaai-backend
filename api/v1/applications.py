@@ -105,53 +105,55 @@ async def create_application(
     Validates that business_owner_membership_id and it_owner_membership_id belong to the tenant.
     """
     try:
-        # Validate business owner membership belongs to tenant
-        business_owner_query = select(UserTenant).where(
-            UserTenant.id == application_data.business_owner_membership_id
-        )
-        if not current_user.is_platform_admin:
-            business_owner_query = business_owner_query.where(
-                UserTenant.tenant_id == tenancy.tenant_id
+        # Validate business owner membership belongs to tenant (if provided)
+        if application_data.business_owner_membership_id:
+            business_owner_query = select(UserTenant).where(
+                UserTenant.id == application_data.business_owner_membership_id
             )
+            if not current_user.is_platform_admin:
+                business_owner_query = business_owner_query.where(
+                    UserTenant.tenant_id == tenancy.tenant_id
+                )
+            
+            result = await db.execute(business_owner_query)
+            business_owner = result.scalar_one_or_none()
+            
+            if not business_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Business owner membership not found",
+                )
+            
+            if business_owner.tenant_id != tenancy.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Business owner must belong to the same tenant",
+                )
         
-        result = await db.execute(business_owner_query)
-        business_owner = result.scalar_one_or_none()
-        
-        if not business_owner:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business owner membership not found",
+        # Validate IT owner membership belongs to tenant (if provided)
+        if application_data.it_owner_membership_id:
+            it_owner_query = select(UserTenant).where(
+                UserTenant.id == application_data.it_owner_membership_id
             )
-        
-        if business_owner.tenant_id != tenancy.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Business owner must belong to the same tenant",
-            )
-        
-        # Validate IT owner membership belongs to tenant
-        it_owner_query = select(UserTenant).where(
-            UserTenant.id == application_data.it_owner_membership_id
-        )
-        if not current_user.is_platform_admin:
-            it_owner_query = it_owner_query.where(
-                UserTenant.tenant_id == tenancy.tenant_id
-            )
-        
-        result = await db.execute(it_owner_query)
-        it_owner = result.scalar_one_or_none()
-        
-        if not it_owner:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="IT owner membership not found",
-            )
-        
-        if it_owner.tenant_id != tenancy.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="IT owner must belong to the same tenant",
-            )
+            if not current_user.is_platform_admin:
+                it_owner_query = it_owner_query.where(
+                    UserTenant.tenant_id == tenancy.tenant_id
+                )
+            
+            result = await db.execute(it_owner_query)
+            it_owner = result.scalar_one_or_none()
+            
+            if not it_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="IT owner membership not found",
+                )
+            
+            if it_owner.tenant_id != tenancy.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="IT owner must belong to the same tenant",
+                )
         
         # Override tenant_id from membership context (security: never trust client)
         application = Application(
