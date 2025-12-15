@@ -32,18 +32,33 @@ Examples:
 
 ---
 
+## Signup & SSO Onboarding
+
+### Signup
+A signup request for the pilot program.
+Example:
+- "john@acme.com" requests access, status: "pending_review"
+
+### SetupToken
+One-time token for SSO onboarding (expires in 7 days).
+Example:
+- Token generated when SSO signup is promoted
+- Used to access SSO configuration page
+
+### TenantSSOConfig
+SSO configuration for a tenant (SAML 2.0 or OIDC).
+Example:
+- Acme Corp has Okta SSO configured
+- One config per tenant
+
+---
+
 ## Audit Domain
 
 ### Project
 An engagement within a tenant.
 Example:
 - "FY25 SOX Audit" for Acme Corp
-
-### Application
-An IT system in scope.
-Example:
-- SAP
-- Workday
 
 ### Control (RACM)
 A SOX control owned by the tenant.
@@ -54,41 +69,3 @@ Example:
 Overrides control behavior for a specific audit.
 Example:
 - Control is "key" this year but not last year
-
----
-
-## Evidence & Testing
-
-### PBC Request
-A request sent to the client.
-Example:
-- "Provide user access listing for SAP"
-
-### EvidenceFile
-Uploaded proof.
-Example:
-- CSV export of SAP users
-
-### EvidencePage
-A page or image derived from evidence.
-
----
-
-## AI Pipeline
-
-### AI_RUN
-One AI execution.
-Examples:
-- OCR extraction
-- Evidence validation
-- Control-level conclusion
-
-### AI_L1–L4 Index Tables
-Thin tables for fast querying of AI results by level.
-
----
-
-## Findings
-Issues raised during the audit.
-Example:
-- Terminated user still active in SAP

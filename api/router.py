@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from api.v1 import auth, controls, db_check, health, me_stub, project_controls, projects, setup, signups, tenants, users
+from api.v1 import auth, controls, db_check, health, me_stub, project_controls, projects, setup, signups, tenants, users, applications, project_applications, control_applications
 from api.v1.admin import signups as admin_signups
 
 # Main API router
@@ -19,6 +19,9 @@ v1_router.include_router(users.router, tags=["users"])
 v1_router.include_router(projects.router, tags=["projects"])
 v1_router.include_router(controls.router, tags=["controls"])
 v1_router.include_router(project_controls.router, tags=["project-controls"])
+v1_router.include_router(applications.router, tags=["applications"])
+v1_router.include_router(project_applications.router, tags=["project-applications"])
+v1_router.include_router(control_applications.router, tags=["control-applications"])
 v1_router.include_router(signups.router, tags=["signups"])
 v1_router.include_router(setup.router, tags=["setup"])
 v1_router.include_router(admin_signups.router, tags=["admin"])
