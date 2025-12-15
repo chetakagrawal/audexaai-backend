@@ -10,6 +10,9 @@ from models.auth_identity import AuthIdentity
 from models.project import Project
 from models.control import Control
 from models.project_control import ProjectControl
+from models.application import Application
+from models.project_application import ProjectApplication
+from models.control_application import ControlApplication
 from models.signup import Signup
 from models.setup_token import SetupToken
 from models.tenant_sso_config import TenantSSOConfig
@@ -23,6 +26,9 @@ __all__ = [
     "Project",
     "Control",
     "ProjectControl",
+    "Application",
+    "ProjectApplication",
+    "ControlApplication",
     "Signup",
     "SetupToken",
     "TenantSSOConfig",
