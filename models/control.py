@@ -73,6 +73,8 @@ class ControlCreate(ControlBase):
     
     Note: tenant_id is NOT included - it's set from membership context server-side.
     """
+    
+    application_ids: list[UUID] | None = None
 
 
 class ControlResponse(ControlBase):

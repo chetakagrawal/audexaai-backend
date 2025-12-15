@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
-from models.control import Control, ControlBase, ControlResponse
+from models.application import Application
+from models.control import Control, ControlBase, ControlCreate, ControlResponse
+from models.control_application import ControlApplication
 from models.user import User
 
 router = APIRouter()
@@ -92,13 +94,16 @@ async def get_control(
 
 @router.post("/controls", response_model=ControlResponse)
 async def create_control(
-    control_data: ControlBase,
+    control_data: ControlCreate,
     current_user: User = Depends(get_current_user),
     tenancy=Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new control.
+    
+    If application_ids are provided, also creates control_applications records
+    in the same transaction.
     
     Note: tenant_id is set from membership context (never from client input).
     """
@@ -118,6 +123,54 @@ async def create_control(
         )
         
         db.add(control)
+        await db.flush()  # Flush to get the control.id without committing
+        
+        # If application_ids are provided, create control_applications records
+        if control_data.application_ids:
+            # Verify all applications exist and belong to the same tenant
+            application_ids = control_data.application_ids
+            application_query = select(Application).where(Application.id.in_(application_ids))
+            if not current_user.is_platform_admin:
+                application_query = application_query.where(Application.tenant_id == tenancy.tenant_id)
+            
+            result = await db.execute(application_query)
+            applications = result.scalars().all()
+            
+            # Check if all requested applications were found
+            found_ids = {app.id for app in applications}
+            missing_ids = set(application_ids) - found_ids
+            if missing_ids:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Applications not found: {missing_ids}",
+                )
+            
+            # Verify all applications belong to the same tenant
+            for app in applications:
+                if app.tenant_id != tenancy.tenant_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Application {app.id} does not belong to the same tenant",
+                    )
+            
+            # Create control_applications records
+            for application_id in application_ids:
+                # Check if mapping already exists (shouldn't, but be safe)
+                existing_query = select(ControlApplication).where(
+                    ControlApplication.control_id == control.id,
+                    ControlApplication.application_id == application_id,
+                )
+                result = await db.execute(existing_query)
+                existing = result.scalar_one_or_none()
+                
+                if not existing:
+                    control_application = ControlApplication(
+                        tenant_id=tenancy.tenant_id,
+                        control_id=control.id,
+                        application_id=application_id,
+                    )
+                    db.add(control_application)
+        
         await db.commit()
         await db.refresh(control)
         
