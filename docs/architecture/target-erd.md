@@ -225,20 +225,13 @@ erDiagram
     uuid tenant_id FK
     uuid project_id FK
     uuid application_id FK
+    uuid control_id FK
     uuid owner_membership_id FK
-    uuid primary_control_id FK
     string title
     int samples_requested
     date due_date
     string status
     datetime created_at
-  }
-
-  pbc_request_controls {
-    uuid id PK
-    uuid tenant_id FK
-    uuid pbc_request_id FK
-    uuid control_id FK
   }
 
   evidence_files {
@@ -390,10 +383,8 @@ erDiagram
 
   projects ||--o{ pbc_requests : has
   applications ||--o{ pbc_requests : for_app
+  controls ||--o{ pbc_requests : for_control
   user_tenants ||--o{ pbc_requests : owned_by
-
-  pbc_requests ||--o{ pbc_request_controls : covers
-  controls ||--o{ pbc_request_controls : required_for
 
   pbc_requests ||--o{ evidence_files : receives
   user_tenants ||--o{ evidence_files : uploaded_by

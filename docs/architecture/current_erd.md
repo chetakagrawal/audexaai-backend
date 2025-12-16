@@ -122,14 +122,16 @@ erDiagram
   controls {
     uuid id PK
     uuid tenant_id FK
-    uuid owned_by_membership_id FK
-    string control_id UK
+    uuid created_by_membership_id FK
+    string control_code UK
     string name
-    string description
+    string category
+    string risk_rating
     string control_type
-    boolean is_key_control
+    string frequency
+    boolean is_key
+    boolean is_automated
     datetime created_at
-    datetime updated_at
   }
 
   project_controls {
@@ -137,9 +139,22 @@ erDiagram
     uuid tenant_id FK
     uuid project_id FK
     uuid control_id FK
-    boolean is_key_control
+    boolean is_key_override
+    string frequency_override
+    string notes
     datetime created_at
-    datetime updated_at
+  }
+
+  test_attributes {
+    uuid id PK
+    uuid tenant_id FK
+    uuid control_id FK
+    string code
+    string name
+    string frequency
+    string test_procedure
+    string expected_evidence
+    datetime created_at
   }
 
   applications {
@@ -169,6 +184,20 @@ erDiagram
     datetime created_at
   }
 
+  pbc_requests {
+    uuid id PK
+    uuid tenant_id FK
+    uuid project_id FK
+    uuid application_id FK
+    uuid control_id FK
+    uuid owner_membership_id FK
+    string title
+    int samples_requested
+    date due_date
+    string status
+    datetime created_at
+  }
+
   %% Relationships
   users   ||--o{ user_tenants     : has
   tenants ||--o{ user_tenants     : has
@@ -183,9 +212,10 @@ erDiagram
   tenants ||--o{ projects         : has
   tenants ||--o{ controls         : has
   tenants ||--o{ applications     : has
+  tenants ||--o{ test_attributes  : has
 
   user_tenants ||--o{ projects    : creates
-  user_tenants ||--o{ controls    : owns
+  user_tenants ||--o{ controls    : created_by
   user_tenants ||--o{ applications : business_owns
   user_tenants ||--o{ applications : it_owns
 
@@ -198,6 +228,14 @@ erDiagram
 
   controls ||--o{ control_applications : mapped_to
   applications ||--o{ control_applications : maps
+
+  controls ||--o{ test_attributes : has
+
+  projects ||--o{ pbc_requests : has
+  applications ||--o{ pbc_requests : for_app
+  controls ||--o{ pbc_requests : for_control
+  user_tenants ||--o{ pbc_requests : owned_by
+  tenants ||--o{ pbc_requests : scopes
 
   %% Promotion targets (optional FKs on signups)
   tenants      ||--o{ signups     : promoted_from
