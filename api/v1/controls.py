@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
-from models.application import Application
+from models.application import Application, ApplicationResponse
 from models.control import Control, ControlBase, ControlCreate, ControlResponse
 from models.control_application import ControlApplication
 from models.user import User
@@ -26,7 +26,7 @@ async def list_controls(
     List controls in the current user's tenant.
     
     Returns:
-        List of controls in the tenant.
+        List of controls in the tenant with their associated applications.
     """
     try:
         # Platform admins can see all controls
@@ -39,7 +39,70 @@ async def list_controls(
             )
         
         controls = result.scalars().all()
-        return controls
+        
+        # Fetch applications for all controls
+        control_ids = [control.id for control in controls]
+        if control_ids:
+            # Get all control_applications for these controls
+            control_apps_query = select(ControlApplication).where(
+                ControlApplication.control_id.in_(control_ids)
+            )
+            if not current_user.is_platform_admin:
+                control_apps_query = control_apps_query.where(
+                    ControlApplication.tenant_id == tenancy.tenant_id
+                )
+            
+            control_apps_result = await db.execute(control_apps_query)
+            control_applications = control_apps_result.scalars().all()
+            
+            # Get all unique application IDs
+            application_ids = list(set(ca.application_id for ca in control_applications))
+            
+            # Fetch all applications
+            applications_map = {}
+            if application_ids:
+                apps_query = select(Application).where(Application.id.in_(application_ids))
+                if not current_user.is_platform_admin:
+                    apps_query = apps_query.where(Application.tenant_id == tenancy.tenant_id)
+                
+                apps_result = await db.execute(apps_query)
+                applications = apps_result.scalars().all()
+                applications_map = {app.id: app for app in applications}
+            
+            # Build a map of control_id -> list of applications
+            control_applications_map = {}
+            for ca in control_applications:
+                if ca.control_id not in control_applications_map:
+                    control_applications_map[ca.control_id] = []
+                if ca.application_id in applications_map:
+                    control_applications_map[ca.control_id].append(applications_map[ca.application_id])
+        else:
+            control_applications_map = {}
+        
+        # Build response with applications
+        response = []
+        for control in controls:
+            control_dict = {
+                "id": control.id,
+                "tenant_id": control.tenant_id,
+                "created_by_membership_id": control.created_by_membership_id,
+                "control_code": control.control_code,
+                "name": control.name,
+                "category": control.category,
+                "risk_rating": control.risk_rating,
+                "control_type": control.control_type,
+                "frequency": control.frequency,
+                "is_key": control.is_key,
+                "is_automated": control.is_automated,
+                "created_at": control.created_at,
+                "applications": [
+                    ApplicationResponse.model_validate(app)
+                    for app in control_applications_map.get(control.id, [])
+                ],
+            }
+            response.append(ControlResponse.model_validate(control_dict))
+        
+        return response
     except HTTPException:
         raise
     except Exception as e:
@@ -60,7 +123,7 @@ async def get_control(
     Get a specific control by ID.
     
     Returns:
-        Control if found and user has access.
+        Control if found and user has access, with associated applications.
     
     Raises:
         404 if control not found or user doesn't have access.
@@ -82,7 +145,49 @@ async def get_control(
                 detail="Control not found",
             )
         
-        return control
+        # Fetch applications for this control
+        control_apps_query = select(ControlApplication).where(
+            ControlApplication.control_id == control_id
+        )
+        if not current_user.is_platform_admin:
+            control_apps_query = control_apps_query.where(
+                ControlApplication.tenant_id == tenancy.tenant_id
+            )
+        
+        control_apps_result = await db.execute(control_apps_query)
+        control_applications = control_apps_result.scalars().all()
+        
+        # Fetch applications
+        applications = []
+        if control_applications:
+            application_ids = [ca.application_id for ca in control_applications]
+            apps_query = select(Application).where(Application.id.in_(application_ids))
+            if not current_user.is_platform_admin:
+                apps_query = apps_query.where(Application.tenant_id == tenancy.tenant_id)
+            
+            apps_result = await db.execute(apps_query)
+            applications = apps_result.scalars().all()
+        
+        # Build response with applications
+        control_dict = {
+            "id": control.id,
+            "tenant_id": control.tenant_id,
+            "created_by_membership_id": control.created_by_membership_id,
+            "control_code": control.control_code,
+            "name": control.name,
+            "category": control.category,
+            "risk_rating": control.risk_rating,
+            "control_type": control.control_type,
+            "frequency": control.frequency,
+            "is_key": control.is_key,
+            "is_automated": control.is_automated,
+            "created_at": control.created_at,
+            "applications": [
+                ApplicationResponse.model_validate(app) for app in applications
+            ],
+        }
+        
+        return ControlResponse.model_validate(control_dict)
     except HTTPException:
         raise
     except Exception as e:
@@ -174,7 +279,40 @@ async def create_control(
         await db.commit()
         await db.refresh(control)
         
-        return control
+        # Fetch applications for the response
+        control_apps_query = select(ControlApplication).where(
+            ControlApplication.control_id == control.id
+        )
+        control_apps_result = await db.execute(control_apps_query)
+        control_applications = control_apps_result.scalars().all()
+        
+        applications = []
+        if control_applications:
+            application_ids = [ca.application_id for ca in control_applications]
+            apps_query = select(Application).where(Application.id.in_(application_ids))
+            apps_result = await db.execute(apps_query)
+            applications = apps_result.scalars().all()
+        
+        # Build response with applications
+        control_dict = {
+            "id": control.id,
+            "tenant_id": control.tenant_id,
+            "created_by_membership_id": control.created_by_membership_id,
+            "control_code": control.control_code,
+            "name": control.name,
+            "category": control.category,
+            "risk_rating": control.risk_rating,
+            "control_type": control.control_type,
+            "frequency": control.frequency,
+            "is_key": control.is_key,
+            "is_automated": control.is_automated,
+            "created_at": control.created_at,
+            "applications": [
+                ApplicationResponse.model_validate(app) for app in applications
+            ],
+        }
+        
+        return ControlResponse.model_validate(control_dict)
     except HTTPException:
         raise
     except Exception as e:
