@@ -1,6 +1,7 @@
 """Control model - tenant-owned SOX control."""
 
 from datetime import datetime
+from typing import List
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from db import Base
+from models.application import ApplicationResponse
 
 
 class Control(Base):
@@ -86,4 +88,5 @@ class ControlResponse(ControlBase):
     tenant_id: UUID
     created_by_membership_id: UUID
     created_at: datetime
+    applications: List[ApplicationResponse] = []  # Applications associated with this control
 
