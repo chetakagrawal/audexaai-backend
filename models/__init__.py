@@ -15,6 +15,7 @@ from models.project_application import ProjectApplication
 from models.control_application import ControlApplication
 from models.test_attribute import TestAttribute
 from models.pbc_request import PbcRequest
+from models.evidence_file import EvidenceFile
 from models.signup import Signup
 from models.setup_token import SetupToken
 from models.tenant_sso_config import TenantSSOConfig
@@ -33,6 +34,7 @@ __all__ = [
     "ControlApplication",
     "TestAttribute",
     "PbcRequest",
+    "EvidenceFile",
     "Signup",
     "SetupToken",
     "TenantSSOConfig",

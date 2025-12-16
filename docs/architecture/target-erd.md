@@ -234,10 +234,25 @@ erDiagram
     datetime created_at
   }
 
+  samples {
+    uuid id PK
+    uuid tenant_id FK
+    uuid pbc_request_id FK
+    int sample_number
+    string identifier
+    string description
+    string status
+    text test_notes
+    datetime tested_at
+    uuid tested_by_membership_id FK
+    datetime created_at
+  }
+
   evidence_files {
     uuid id PK
     uuid tenant_id FK
     uuid pbc_request_id FK
+    uuid sample_id FK
     uuid uploaded_by_membership_id FK
     string filename
     string mime_type
@@ -386,7 +401,12 @@ erDiagram
   controls ||--o{ pbc_requests : for_control
   user_tenants ||--o{ pbc_requests : owned_by
 
+  pbc_requests ||--o{ samples : has
+  user_tenants ||--o{ samples : tested_by
+  tenants ||--o{ samples : scopes
+
   pbc_requests ||--o{ evidence_files : receives
+  samples ||--o{ evidence_files : linked_to
   user_tenants ||--o{ evidence_files : uploaded_by
   evidence_files ||--o{ evidence_pages : splits_into
 
