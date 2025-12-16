@@ -198,6 +198,22 @@ erDiagram
     datetime created_at
   }
 
+  evidence_files {
+    uuid id PK
+    uuid tenant_id FK
+    uuid pbc_request_id FK
+    uuid sample_id
+    uuid uploaded_by_membership_id FK
+    string filename
+    string mime_type
+    string storage_uri
+    string content_hash
+    int version
+    uuid supersedes_file_id FK
+    int page_count
+    datetime uploaded_at
+  }
+
   %% Relationships
   users   ||--o{ user_tenants     : has
   tenants ||--o{ user_tenants     : has
@@ -236,6 +252,10 @@ erDiagram
   controls ||--o{ pbc_requests : for_control
   user_tenants ||--o{ pbc_requests : owned_by
   tenants ||--o{ pbc_requests : scopes
+
+  pbc_requests ||--o{ evidence_files : receives
+  user_tenants ||--o{ evidence_files : uploaded_by
+  tenants ||--o{ evidence_files : scopes
 
   %% Promotion targets (optional FKs on signups)
   tenants      ||--o{ signups     : promoted_from
