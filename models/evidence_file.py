@@ -42,7 +42,7 @@ class EvidenceFile(Base):
     )
     sample_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        # FK to samples.id will be added when samples table is implemented
+        ForeignKey("samples.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

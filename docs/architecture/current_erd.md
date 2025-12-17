@@ -198,11 +198,25 @@ erDiagram
     datetime created_at
   }
 
+  samples {
+    uuid id PK
+    uuid tenant_id FK
+    uuid pbc_request_id FK
+    int sample_number
+    string identifier
+    string description
+    string status
+    text test_notes
+    datetime tested_at
+    uuid tested_by_membership_id FK
+    datetime created_at
+  }
+
   evidence_files {
     uuid id PK
     uuid tenant_id FK
     uuid pbc_request_id FK
-    uuid sample_id
+    uuid sample_id FK
     uuid uploaded_by_membership_id FK
     string filename
     string mime_type
@@ -229,6 +243,7 @@ erDiagram
   tenants ||--o{ controls         : has
   tenants ||--o{ applications     : has
   tenants ||--o{ test_attributes  : has
+  tenants ||--o{ samples          : scopes
 
   user_tenants ||--o{ projects    : creates
   user_tenants ||--o{ controls    : created_by
@@ -253,7 +268,11 @@ erDiagram
   user_tenants ||--o{ pbc_requests : owned_by
   tenants ||--o{ pbc_requests : scopes
 
+  pbc_requests ||--o{ samples : has
+  user_tenants ||--o{ samples : tested_by
+
   pbc_requests ||--o{ evidence_files : receives
+  samples ||--o{ evidence_files : linked_to
   user_tenants ||--o{ evidence_files : uploaded_by
   tenants ||--o{ evidence_files : scopes
 
