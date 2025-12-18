@@ -48,6 +48,28 @@ class ProjectControl(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=datetime.utcnow,
+    )
+    updated_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
 
     # Composite unique constraint: (tenant_id, project_id, control_id)
     # Ensures a control can only be added once per project, scoped by tenant
@@ -85,4 +107,8 @@ class ProjectControlResponse(ProjectControlBase):
     project_id: UUID
     control_id: UUID
     created_at: datetime
+    updated_at: datetime | None = None
+    updated_by_membership_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by_membership_id: UUID | None = None
 
