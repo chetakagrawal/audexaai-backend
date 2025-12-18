@@ -72,6 +72,16 @@ class ApplicationCreate(ApplicationBase):
     """
 
 
+class ApplicationUpdate(BaseModel):
+    """Schema for updating an application. All fields are optional."""
+
+    name: str | None = None
+    category: str | None = None
+    scope_rationale: str | None = None
+    business_owner_membership_id: UUID | None = None
+    it_owner_membership_id: UUID | None = None
+
+
 class ApplicationResponse(ApplicationBase):
     """Schema for application response."""
 
