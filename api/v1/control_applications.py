@@ -266,3 +266,108 @@ async def list_control_applications(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list control applications: {str(e)}",
         )
+
+
+@router.put(
+    "/controls/{control_id}/applications/bulk",
+    response_model=List[ControlApplicationResponse],
+)
+async def replace_control_applications_bulk(
+    control_id: UUID,
+    application_ids: List[UUID],
+    current_user: User = Depends(get_current_user),
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Replace all applications for a control (removes old, adds new).
+    
+    This endpoint:
+    1. Removes all existing control_applications for this control
+    2. Creates new control_applications for the provided application_ids
+    
+    Note: tenant_id and control_id are derived from context, not client input.
+    """
+    try:
+        # Verify control exists and belongs to tenant
+        control_query = select(Control).where(Control.id == control_id)
+        if not current_user.is_platform_admin:
+            control_query = control_query.where(Control.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(control_query)
+        control = result.scalar_one_or_none()
+        
+        if not control:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Control not found",
+            )
+        
+        # Verify all applications exist and belong to tenant
+        if application_ids:
+            application_query = select(Application).where(Application.id.in_(application_ids))
+            if not current_user.is_platform_admin:
+                application_query = application_query.where(Application.tenant_id == tenancy.tenant_id)
+            
+            result = await db.execute(application_query)
+            applications = result.scalars().all()
+            
+            # Check if all requested applications were found
+            found_ids = {app.id for app in applications}
+            missing_ids = set(application_ids) - found_ids
+            if missing_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Applications not found: {missing_ids}",
+                )
+            
+            # Verify all applications belong to same tenant as control
+            for app in applications:
+                if app.tenant_id != control.tenant_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Application {app.id} must belong to the same tenant as the control",
+                    )
+        
+        # Remove all existing control_applications for this control
+        existing_query = select(ControlApplication).where(
+            ControlApplication.control_id == control_id
+        )
+        if not current_user.is_platform_admin:
+            existing_query = existing_query.where(
+                ControlApplication.tenant_id == tenancy.tenant_id
+            )
+        
+        result = await db.execute(existing_query)
+        existing_mappings = result.scalars().all()
+        
+        for mapping in existing_mappings:
+            await db.delete(mapping)
+        
+        # Create new control_applications records
+        created_mappings = []
+        for application_id in application_ids:
+            control_application = ControlApplication(
+                tenant_id=tenancy.tenant_id,
+                control_id=control_id,
+                application_id=application_id,
+            )
+            db.add(control_application)
+            created_mappings.append(control_application)
+        
+        await db.commit()
+        
+        # Refresh all created mappings
+        for mapping in created_mappings:
+            await db.refresh(mapping)
+        
+        return created_mappings
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to replace control applications: {str(e)}",
+        )

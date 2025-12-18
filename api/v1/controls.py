@@ -322,3 +322,98 @@ async def create_control(
             detail=f"Failed to create control: {str(e)}",
         )
 
+
+@router.put("/controls/{control_id}", response_model=ControlResponse)
+async def update_control(
+    control_id: UUID,
+    control_data: ControlBase,
+    current_user: User = Depends(get_current_user),
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update a control.
+    
+    Note: tenant_id cannot be changed via this endpoint.
+    """
+    try:
+        # Build query with tenant filtering
+        query = select(Control).where(Control.id == control_id)
+        
+        if not current_user.is_platform_admin:
+            # Regular users: must filter by tenant_id
+            query = query.where(Control.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(query)
+        control = result.scalar_one_or_none()
+        
+        if not control:
+            raise HTTPException(
+                status_code=404,
+                detail="Control not found",
+            )
+        
+        # Update control fields
+        control.control_code = control_data.control_code
+        control.name = control_data.name
+        control.category = control_data.category
+        control.risk_rating = control_data.risk_rating
+        control.control_type = control_data.control_type
+        control.frequency = control_data.frequency
+        control.is_key = control_data.is_key
+        control.is_automated = control_data.is_automated
+        
+        await db.commit()
+        await db.refresh(control)
+        
+        # Fetch applications for the response
+        control_apps_query = select(ControlApplication).where(
+            ControlApplication.control_id == control_id
+        )
+        if not current_user.is_platform_admin:
+            control_apps_query = control_apps_query.where(
+                ControlApplication.tenant_id == tenancy.tenant_id
+            )
+        
+        control_apps_result = await db.execute(control_apps_query)
+        control_applications = control_apps_result.scalars().all()
+        
+        # Fetch applications
+        applications = []
+        if control_applications:
+            application_ids = [ca.application_id for ca in control_applications]
+            apps_query = select(Application).where(Application.id.in_(application_ids))
+            if not current_user.is_platform_admin:
+                apps_query = apps_query.where(Application.tenant_id == tenancy.tenant_id)
+            
+            apps_result = await db.execute(apps_query)
+            applications = apps_result.scalars().all()
+        
+        # Build response with applications
+        control_dict = {
+            "id": control.id,
+            "tenant_id": control.tenant_id,
+            "created_by_membership_id": control.created_by_membership_id,
+            "control_code": control.control_code,
+            "name": control.name,
+            "category": control.category,
+            "risk_rating": control.risk_rating,
+            "control_type": control.control_type,
+            "frequency": control.frequency,
+            "is_key": control.is_key,
+            "is_automated": control.is_automated,
+            "created_at": control.created_at,
+            "applications": [
+                ApplicationResponse.model_validate(app) for app in applications
+            ],
+        }
+        
+        return ControlResponse.model_validate(control_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update control: {str(e)}",
+        )
