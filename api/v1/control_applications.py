@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
 from models.application import Application
-from models.control import Control
+from models.control import Control, ControlResponse
 from models.control_application import (
     ControlApplication,
     ControlApplicationCreate,
@@ -370,4 +370,123 @@ async def replace_control_applications_bulk(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to replace control applications: {str(e)}",
+        )
+
+
+@router.get(
+    "/applications/{application_id}/controls",
+    response_model=List[ControlResponse],
+)
+async def list_application_controls(
+    application_id: UUID,
+    current_user: User = Depends(get_current_user),
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List all controls attached to an application (reverse lookup).
+    
+    Returns control details for controls mapped to the given application.
+    """
+    try:
+        # Verify application exists and belongs to tenant
+        application_query = select(Application).where(Application.id == application_id)
+        if not current_user.is_platform_admin:
+            application_query = application_query.where(Application.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(application_query)
+        application = result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Application not found",
+            )
+        
+        # Get all control_applications for this application
+        query = select(ControlApplication).where(ControlApplication.application_id == application_id)
+        if not current_user.is_platform_admin:
+            query = query.where(ControlApplication.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(query)
+        control_applications = result.scalars().all()
+        
+        if not control_applications:
+            return []
+        
+        # Get control IDs
+        control_ids = [ca.control_id for ca in control_applications]
+        
+        # Fetch the actual controls
+        controls_query = select(Control).where(Control.id.in_(control_ids))
+        if not current_user.is_platform_admin:
+            controls_query = controls_query.where(Control.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(controls_query)
+        controls = result.scalars().all()
+        
+        # For each control, fetch its applications (similar to list_controls)
+        control_ids_list = [control.id for control in controls]
+        if control_ids_list:
+            control_apps_query = select(ControlApplication).where(
+                ControlApplication.control_id.in_(control_ids_list)
+            )
+            if not current_user.is_platform_admin:
+                control_apps_query = control_apps_query.where(
+                    ControlApplication.tenant_id == tenancy.tenant_id
+                )
+            
+            result = await db.execute(control_apps_query)
+            all_control_apps = result.scalars().all()
+            
+            # Group applications by control_id
+            apps_by_control: dict[UUID, list[Application]] = {}
+            for ca in all_control_apps:
+                if ca.control_id not in apps_by_control:
+                    apps_by_control[ca.control_id] = []
+            
+            # Fetch application details
+            app_ids = {ca.application_id for ca in all_control_apps}
+            if app_ids:
+                apps_query = select(Application).where(Application.id.in_(app_ids))
+                if not current_user.is_platform_admin:
+                    apps_query = apps_query.where(Application.tenant_id == tenancy.tenant_id)
+                
+                result = await db.execute(apps_query)
+                applications = result.scalars().all()
+                app_dict = {app.id: app for app in applications}
+                
+                # Map applications to controls
+                for ca in all_control_apps:
+                    if ca.control_id in apps_by_control and ca.application_id in app_dict:
+                        apps_by_control[ca.control_id].append(app_dict[ca.application_id])
+        
+        # Build response with applications included
+        response = []
+        for control in controls:
+            control_dict = {
+                "id": control.id,
+                "tenant_id": control.tenant_id,
+                "created_by_membership_id": control.created_by_membership_id,
+                "control_code": control.control_code,
+                "name": control.name,
+                "category": control.category,
+                "risk_rating": control.risk_rating,
+                "control_type": control.control_type,
+                "frequency": control.frequency,
+                "is_key": control.is_key,
+                "is_automated": control.is_automated,
+                "created_at": control.created_at,
+                "applications": apps_by_control.get(control.id, []),
+            }
+            response.append(control_dict)
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list application controls: {str(e)}",
         )

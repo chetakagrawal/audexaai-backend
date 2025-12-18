@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
-from models.application import Application, ApplicationBase, ApplicationCreate, ApplicationResponse
+from models.application import Application, ApplicationBase, ApplicationCreate, ApplicationResponse, ApplicationUpdate
 from models.user import User
 from models.user_tenant import UserTenant
 
@@ -177,4 +177,111 @@ async def create_application(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create application: {str(e)}",
+        )
+
+
+@router.put("/applications/{application_id}", response_model=ApplicationResponse)
+async def update_application(
+    application_id: UUID,
+    application_data: ApplicationUpdate,
+    current_user: User = Depends(get_current_user),
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update an existing application.
+    
+    Only provided fields will be updated. Validates that business_owner_membership_id 
+    and it_owner_membership_id belong to the tenant.
+    """
+    try:
+        # Build query with tenant filtering
+        query = select(Application).where(Application.id == application_id)
+        
+        if not current_user.is_platform_admin:
+            # Regular users: must filter by tenant_id
+            query = query.where(Application.tenant_id == tenancy.tenant_id)
+        
+        result = await db.execute(query)
+        application = result.scalar_one_or_none()
+        
+        if not application:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Application not found",
+            )
+        
+        # Validate business owner membership belongs to tenant (if provided)
+        if application_data.business_owner_membership_id is not None:
+            business_owner_query = select(UserTenant).where(
+                UserTenant.id == application_data.business_owner_membership_id
+            )
+            if not current_user.is_platform_admin:
+                business_owner_query = business_owner_query.where(
+                    UserTenant.tenant_id == tenancy.tenant_id
+                )
+            
+            result = await db.execute(business_owner_query)
+            business_owner = result.scalar_one_or_none()
+            
+            if not business_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Business owner membership not found",
+                )
+            
+            if business_owner.tenant_id != tenancy.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Business owner must belong to the same tenant",
+                )
+        
+        # Validate IT owner membership belongs to tenant (if provided)
+        if application_data.it_owner_membership_id is not None:
+            it_owner_query = select(UserTenant).where(
+                UserTenant.id == application_data.it_owner_membership_id
+            )
+            if not current_user.is_platform_admin:
+                it_owner_query = it_owner_query.where(
+                    UserTenant.tenant_id == tenancy.tenant_id
+                )
+            
+            result = await db.execute(it_owner_query)
+            it_owner = result.scalar_one_or_none()
+            
+            if not it_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="IT owner membership not found",
+                )
+            
+            if it_owner.tenant_id != tenancy.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="IT owner must belong to the same tenant",
+                )
+        
+        # Update only provided fields
+        if application_data.name is not None:
+            application.name = application_data.name
+        if application_data.category is not None:
+            application.category = application_data.category
+        if application_data.scope_rationale is not None:
+            application.scope_rationale = application_data.scope_rationale
+        if application_data.business_owner_membership_id is not None:
+            application.business_owner_membership_id = application_data.business_owner_membership_id
+        if application_data.it_owner_membership_id is not None:
+            application.it_owner_membership_id = application_data.it_owner_membership_id
+        
+        await db.commit()
+        await db.refresh(application)
+        
+        return application
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update application: {str(e)}",
         )
