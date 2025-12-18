@@ -67,6 +67,15 @@ class ProjectCreate(ProjectBase):
     """
 
 
+class ProjectUpdate(BaseModel):
+    """Schema for updating a project. All fields are optional."""
+
+    name: str | None = None
+    status: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+
+
 class ProjectResponse(ProjectBase):
     """Schema for project response."""
 
