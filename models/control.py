@@ -2,13 +2,13 @@
 
 from datetime import datetime
 from typing import List
-from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
 import sqlalchemy as sa
 from sqlalchemy import String, Boolean, ForeignKey, DateTime, Integer, Index
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from uuid import UUID, uuid4
 
 from db import Base
 
@@ -76,6 +76,13 @@ class Control(Base):
         Integer,
         nullable=False,
         default=1,
+    )
+
+    # Relationship to ControlApplication rows (not direct to Application)
+    control_applications: Mapped[List["ControlApplication"]] = relationship(
+        "ControlApplication",
+        foreign_keys="ControlApplication.control_id",
+        back_populates="control",
     )
 
     # Partial unique index: control_code must be unique per tenant for ACTIVE controls only

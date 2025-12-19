@@ -1,12 +1,13 @@
 """Application model - tenant-owned business application."""
 
 from datetime import datetime
+from typing import List
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
 import sqlalchemy as sa
 from sqlalchemy import String, ForeignKey, DateTime, Integer, Index
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from db import Base
@@ -82,6 +83,13 @@ class Application(Base):
         Integer,
         nullable=False,
         default=1,
+    )
+
+    # Relationship to ControlApplication rows (not direct to Control)
+    control_applications: Mapped[List["ControlApplication"]] = relationship(
+        "ControlApplication",
+        foreign_keys="ControlApplication.application_id",
+        back_populates="application",
     )
 
     # Partial unique index: name must be unique per tenant for ACTIVE applications only
