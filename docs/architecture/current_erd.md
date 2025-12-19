@@ -123,7 +123,7 @@ erDiagram
     uuid id PK
     uuid tenant_id FK
     uuid created_by_membership_id FK
-    string control_code UK
+    string control_code "Partial UK: (tenant_id, control_code) WHERE deleted_at IS NULL"
     string name
     string category
     string risk_rating
@@ -132,6 +132,11 @@ erDiagram
     boolean is_key
     boolean is_automated
     datetime created_at
+    datetime updated_at
+    uuid updated_by_membership_id FK
+    datetime deleted_at
+    uuid deleted_by_membership_id FK
+    int row_version
   }
 
   project_controls {
@@ -247,6 +252,8 @@ erDiagram
 
   user_tenants ||--o{ projects    : creates
   user_tenants ||--o{ controls    : created_by
+  user_tenants ||--o{ controls    : updated_by
+  user_tenants ||--o{ controls    : deleted_by
   user_tenants ||--o{ applications : business_owns
   user_tenants ||--o{ applications : it_owns
 
