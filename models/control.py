@@ -5,12 +5,12 @@ from typing import List
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, Boolean, ForeignKey, DateTime
+import sqlalchemy as sa
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from db import Base
-from models.application import ApplicationResponse
 
 
 class Control(Base):
@@ -49,9 +49,48 @@ class Control(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+    updated_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    row_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
 
-    # Composite unique constraint: control_code must be unique per tenant
+    # Partial unique index: control_code must be unique per tenant for ACTIVE controls only
+    # This allows reusing control_code after soft delete
+    # The partial unique index is created both in the model (for create_all()) and via Alembic migration
+    # Migration: f1a2b3c4d5e6_add_audit_metadata_to_controls creates ux_controls_tenant_code_active
     __table_args__ = (
+        # Partial unique index for PostgreSQL: unique (tenant_id, control_code) WHERE deleted_at IS NULL
+        Index(
+            'ux_controls_tenant_code_active',
+            'tenant_id',
+            'control_code',
+            postgresql_where=sa.text('deleted_at IS NULL'),
+            unique=True,
+        ),
         {"comment": "Controls are tenant-owned SOX controls"},
     )
 
@@ -80,7 +119,10 @@ class ControlCreate(ControlBase):
 
 
 class ControlResponse(ControlBase):
-    """Schema for control response."""
+    """Schema for control response.
+    
+    Note: applications field removed - applications are managed via control_applications endpoints.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,5 +130,9 @@ class ControlResponse(ControlBase):
     tenant_id: UUID
     created_by_membership_id: UUID
     created_at: datetime
-    applications: List[ApplicationResponse] = []  # Applications associated with this control
+    updated_at: datetime
+    updated_by_membership_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by_membership_id: UUID | None = None
+    row_version: int
 
