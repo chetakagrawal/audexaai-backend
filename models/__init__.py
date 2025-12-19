@@ -20,6 +20,8 @@ from models.evidence_file import EvidenceFile
 from models.signup import Signup
 from models.setup_token import SetupToken
 from models.tenant_sso_config import TenantSSOConfig
+from models.entity_version import EntityVersion
+from models.entity_version import EntityVersion
 
 __all__ = [
     "Base",
@@ -40,5 +42,6 @@ __all__ = [
     "Signup",
     "SetupToken",
     "TenantSSOConfig",
+    "EntityVersion",
 ]
 

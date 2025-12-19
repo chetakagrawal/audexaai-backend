@@ -109,8 +109,7 @@ async def create_control(
         is_key=payload.is_key,
         is_automated=payload.is_automated,
         row_version=1,  # Initial version
-        updated_at=datetime.utcnow(),  # Set on creation
-        # updated_by_membership_id is None on creation (only set on updates)
+        # updated_at and updated_by_membership_id are None on creation (only set on updates)
     )
     
     # Create control in database (with error handling for uniqueness)

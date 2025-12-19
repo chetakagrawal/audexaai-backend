@@ -76,7 +76,7 @@ async def test_service_create_control_sets_audit_metadata(db_session: AsyncSessi
     )
     
     assert control.row_version == 1
-    assert control.updated_at is not None
+    assert control.updated_at is None  # Should be NULL on creation
     assert control.updated_by_membership_id is None  # Not set on creation
     assert control.deleted_at is None
     assert control.deleted_by_membership_id is None

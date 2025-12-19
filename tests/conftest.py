@@ -36,8 +36,74 @@ TestSessionLocal = sessionmaker(
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
     """Create a test database session."""
+    from sqlalchemy import text
+    
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Create trigger function and trigger for version history
+        await conn.execute(text("""
+            CREATE OR REPLACE FUNCTION audit_capture_control_version()
+            RETURNS TRIGGER AS $$
+            DECLARE
+                v_operation TEXT;
+                v_changed_by_membership_id UUID;
+            BEGIN
+                -- Determine operation
+                IF TG_OP = 'DELETE' THEN
+                    v_operation := 'DELETE';
+                    v_changed_by_membership_id := NULL;
+                ELSE
+                    -- UPDATE operation
+                    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+                        -- Soft delete: OLD was active, NEW is deleted
+                        v_operation := 'DELETE';
+                        v_changed_by_membership_id := NEW.deleted_by_membership_id;
+                    ELSE
+                        -- Regular update
+                        v_operation := 'UPDATE';
+                        v_changed_by_membership_id := NEW.updated_by_membership_id;
+                    END IF;
+                END IF;
+                
+                -- Insert snapshot into entity_versions
+                INSERT INTO entity_versions (
+                    tenant_id,
+                    entity_type,
+                    entity_id,
+                    operation,
+                    version_num,
+                    valid_from,
+                    valid_to,
+                    changed_by_membership_id,
+                    data
+                ) VALUES (
+                    OLD.tenant_id,
+                    'controls',
+                    OLD.id,
+                    v_operation,
+                    OLD.row_version,
+                    COALESCE(OLD.updated_at, OLD.created_at),
+                    NOW(),
+                    v_changed_by_membership_id,
+                    to_jsonb(OLD)
+                );
+                
+                -- Return appropriate record
+                IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                ELSE
+                    RETURN NEW;
+                END IF;
+            END;
+            $$ LANGUAGE plpgsql;
+        """))
+        await conn.execute(text("""
+            DROP TRIGGER IF EXISTS trigger_audit_capture_control_version ON controls;
+            CREATE TRIGGER trigger_audit_capture_control_version
+            BEFORE UPDATE OR DELETE ON controls
+            FOR EACH ROW
+            EXECUTE FUNCTION audit_capture_control_version();
+        """))
     
     async with TestSessionLocal() as session:
         yield session
@@ -45,6 +111,9 @@ async def db_session():
     
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        # Drop trigger and function
+        await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_control_version ON controls;"))
+        await conn.execute(text("DROP FUNCTION IF EXISTS audit_capture_control_version();"))
 
 
 @pytest.fixture

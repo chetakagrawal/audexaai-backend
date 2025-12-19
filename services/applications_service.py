@@ -92,8 +92,7 @@ async def create_application(
         business_owner_membership_id=payload.business_owner_membership_id,
         it_owner_membership_id=payload.it_owner_membership_id,
         row_version=1,  # Initial version
-        updated_at=datetime.utcnow(),  # Set on creation
-        updated_by_membership_id=membership_ctx.membership_id,  # Set to creator for consistency
+        # updated_at and updated_by_membership_id are None on creation (only set on updates)
     )
     
     # Create in database (with error handling for uniqueness)
