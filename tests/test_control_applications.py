@@ -62,7 +62,8 @@ async def test_attach_application_to_control_success(
     assert "tenant_id" in mapping
     assert mapping["tenant_id"] == str(tenant_a.id)
     assert "id" in mapping
-    assert "created_at" in mapping
+    assert "added_at" in mapping
+    assert "added_by_membership_id" in mapping
 
 
 @pytest.mark.asyncio
@@ -131,9 +132,9 @@ async def test_list_control_applications_success(
     
     assert response.status_code == status.HTTP_200_OK
     
-    mappings = response.json()
-    assert len(mappings) == 2
-    application_ids = [m["application_id"] for m in mappings]
+    applications = response.json()
+    assert len(applications) == 2
+    application_ids = [app["id"] for app in applications]
     assert app1_id in application_ids
     assert app2_id in application_ids
 
@@ -330,5 +331,138 @@ async def test_tenant_isolation_control_applications(
     # Should not see Tenant A's mappings
     assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
     if response.status_code == status.HTTP_200_OK:
-        mappings = response.json()
-        assert len(mappings) == 0  # Should be empty for Tenant B
+        applications = response.json()
+        assert len(applications) == 0  # Should be empty for Tenant B
+
+
+@pytest.mark.asyncio
+async def test_remove_application_from_control_success(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: Removing an application from a control succeeds (soft remove)."""
+    user_a, membership_a = user_tenant_a
+    
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+    
+    # Create control
+    control_data = {
+        "control_code": "AC-001",
+        "name": "Test Control",
+        "is_key": False,
+        "is_automated": False,
+    }
+    control_response = client.post("/api/v1/controls", json=control_data, headers=headers)
+    control = control_response.json()
+    control_id = control["id"]
+    
+    # Create application
+    application_data = {
+        "name": "ERP System",
+        "business_owner_membership_id": str(membership_a.id),
+        "it_owner_membership_id": str(membership_a.id),
+    }
+    application_response = client.post("/api/v1/applications", json=application_data, headers=headers)
+    application = application_response.json()
+    application_id = application["id"]
+    
+    # Attach application to control
+    mapping_data = {"application_id": application_id}
+    client.post(
+        f"/api/v1/controls/{control_id}/applications",
+        json=mapping_data,
+        headers=headers,
+    )
+    
+    # List applications (should have 1)
+    list_response = client.get(
+        f"/api/v1/controls/{control_id}/applications",
+        headers=headers,
+    )
+    assert len(list_response.json()) == 1
+    
+    # Remove application from control
+    delete_response = client.delete(
+        f"/api/v1/controls/{control_id}/applications/{application_id}",
+        headers=headers,
+    )
+    
+    assert delete_response.status_code == status.HTTP_204_NO_CONTENT
+    
+    # List applications again (should be empty)
+    list_response_after = client.get(
+        f"/api/v1/controls/{control_id}/applications",
+        headers=headers,
+    )
+    assert len(list_response_after.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_remove_add_creates_new_mapping(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: Remove -> add again creates a NEW mapping row (history preserved)."""
+    user_a, membership_a = user_tenant_a
+    
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+    
+    # Create control
+    control_data = {
+        "control_code": "AC-001",
+        "name": "Test Control",
+        "is_key": False,
+        "is_automated": False,
+    }
+    control_response = client.post("/api/v1/controls", json=control_data, headers=headers)
+    control_id = control_response.json()["id"]
+    
+    # Create application
+    application_data = {
+        "name": "ERP System",
+        "business_owner_membership_id": str(membership_a.id),
+        "it_owner_membership_id": str(membership_a.id),
+    }
+    application_response = client.post("/api/v1/applications", json=application_data, headers=headers)
+    application_id = application_response.json()["id"]
+    
+    # Add
+    add_response1 = client.post(
+        f"/api/v1/controls/{control_id}/applications",
+        json={"application_id": application_id},
+        headers=headers,
+    )
+    mapping1_id = add_response1.json()["id"]
+    
+    # Remove
+    client.delete(
+        f"/api/v1/controls/{control_id}/applications/{application_id}",
+        headers=headers,
+    )
+    
+    # Add again
+    add_response2 = client.post(
+        f"/api/v1/controls/{control_id}/applications",
+        json={"application_id": application_id},
+        headers=headers,
+    )
+    mapping2_id = add_response2.json()["id"]
+    
+    # Should be a NEW row with different ID
+    assert mapping1_id != mapping2_id
