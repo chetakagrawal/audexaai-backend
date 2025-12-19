@@ -4,21 +4,27 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
-from models.application import Application, ApplicationBase, ApplicationCreate, ApplicationResponse, ApplicationUpdate
+from api.tenancy import TenancyContext
+from models.application import ApplicationCreate, ApplicationResponse, ApplicationUpdate
 from models.user import User
-from models.user_tenant import UserTenant
+from services.applications_service import (
+    create_application,
+    delete_application,
+    get_application,
+    list_applications,
+    update_application,
+)
 
 router = APIRouter()
 
 
 @router.get("/applications", response_model=List[ApplicationResponse])
-async def list_applications(
+async def list_applications_endpoint(
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -29,16 +35,13 @@ async def list_applications(
     """
     try:
         # Platform admins can see all applications
-        if current_user.is_platform_admin:
-            result = await db.execute(select(Application))
-        else:
-            # Regular users: filter by tenant_id
-            result = await db.execute(
-                select(Application).where(Application.tenant_id == tenancy.tenant_id)
-            )
+        applications = await list_applications(
+            db,
+            membership_ctx=tenancy,
+            is_platform_admin=current_user.is_platform_admin,
+        )
         
-        applications = result.scalars().all()
-        return applications
+        return [ApplicationResponse.model_validate(app) for app in applications]
     except HTTPException:
         raise
     except Exception as e:
@@ -49,10 +52,10 @@ async def list_applications(
 
 
 @router.get("/applications/{application_id}", response_model=ApplicationResponse)
-async def get_application(
+async def get_application_endpoint(
     application_id: UUID,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -65,23 +68,14 @@ async def get_application(
         404 if application not found or user doesn't have access.
     """
     try:
-        # Build query with tenant filtering
-        query = select(Application).where(Application.id == application_id)
+        application = await get_application(
+            db,
+            membership_ctx=tenancy,
+            application_id=application_id,
+            is_platform_admin=current_user.is_platform_admin,
+        )
         
-        if not current_user.is_platform_admin:
-            # Regular users: must filter by tenant_id
-            query = query.where(Application.tenant_id == tenancy.tenant_id)
-        
-        result = await db.execute(query)
-        application = result.scalar_one_or_none()
-        
-        if not application:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Application not found",
-            )
-        
-        return application
+        return ApplicationResponse.model_validate(application)
     except HTTPException:
         raise
     except Exception as e:
@@ -92,10 +86,10 @@ async def get_application(
 
 
 @router.post("/applications", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
-async def create_application(
+async def create_application_endpoint(
     application_data: ApplicationCreate,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -105,71 +99,13 @@ async def create_application(
     Validates that business_owner_membership_id and it_owner_membership_id belong to the tenant.
     """
     try:
-        # Validate business owner membership belongs to tenant (if provided)
-        if application_data.business_owner_membership_id:
-            business_owner_query = select(UserTenant).where(
-                UserTenant.id == application_data.business_owner_membership_id
-            )
-            if not current_user.is_platform_admin:
-                business_owner_query = business_owner_query.where(
-                    UserTenant.tenant_id == tenancy.tenant_id
-                )
-            
-            result = await db.execute(business_owner_query)
-            business_owner = result.scalar_one_or_none()
-            
-            if not business_owner:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Business owner membership not found",
-                )
-            
-            if business_owner.tenant_id != tenancy.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Business owner must belong to the same tenant",
-                )
-        
-        # Validate IT owner membership belongs to tenant (if provided)
-        if application_data.it_owner_membership_id:
-            it_owner_query = select(UserTenant).where(
-                UserTenant.id == application_data.it_owner_membership_id
-            )
-            if not current_user.is_platform_admin:
-                it_owner_query = it_owner_query.where(
-                    UserTenant.tenant_id == tenancy.tenant_id
-                )
-            
-            result = await db.execute(it_owner_query)
-            it_owner = result.scalar_one_or_none()
-            
-            if not it_owner:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="IT owner membership not found",
-                )
-            
-            if it_owner.tenant_id != tenancy.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="IT owner must belong to the same tenant",
-                )
-        
-        # Override tenant_id from membership context (security: never trust client)
-        application = Application(
-            tenant_id=tenancy.tenant_id,
-            name=application_data.name,
-            category=application_data.category,
-            scope_rationale=application_data.scope_rationale,
-            business_owner_membership_id=application_data.business_owner_membership_id,
-            it_owner_membership_id=application_data.it_owner_membership_id,
+        application = await create_application(
+            db,
+            membership_ctx=tenancy,
+            payload=application_data,
         )
         
-        db.add(application)
-        await db.commit()
-        await db.refresh(application)
-        
-        return application
+        return ApplicationResponse.model_validate(application)
     except HTTPException:
         raise
     except Exception as e:
@@ -181,11 +117,11 @@ async def create_application(
 
 
 @router.put("/applications/{application_id}", response_model=ApplicationResponse)
-async def update_application(
+async def update_application_endpoint(
     application_id: UUID,
     application_data: ApplicationUpdate,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -195,88 +131,14 @@ async def update_application(
     and it_owner_membership_id belong to the tenant.
     """
     try:
-        # Build query with tenant filtering
-        query = select(Application).where(Application.id == application_id)
+        application = await update_application(
+            db,
+            membership_ctx=tenancy,
+            application_id=application_id,
+            payload=application_data,
+        )
         
-        if not current_user.is_platform_admin:
-            # Regular users: must filter by tenant_id
-            query = query.where(Application.tenant_id == tenancy.tenant_id)
-        
-        result = await db.execute(query)
-        application = result.scalar_one_or_none()
-        
-        if not application:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Application not found",
-            )
-        
-        # Validate business owner membership belongs to tenant (if provided)
-        if application_data.business_owner_membership_id is not None:
-            business_owner_query = select(UserTenant).where(
-                UserTenant.id == application_data.business_owner_membership_id
-            )
-            if not current_user.is_platform_admin:
-                business_owner_query = business_owner_query.where(
-                    UserTenant.tenant_id == tenancy.tenant_id
-                )
-            
-            result = await db.execute(business_owner_query)
-            business_owner = result.scalar_one_or_none()
-            
-            if not business_owner:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Business owner membership not found",
-                )
-            
-            if business_owner.tenant_id != tenancy.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Business owner must belong to the same tenant",
-                )
-        
-        # Validate IT owner membership belongs to tenant (if provided)
-        if application_data.it_owner_membership_id is not None:
-            it_owner_query = select(UserTenant).where(
-                UserTenant.id == application_data.it_owner_membership_id
-            )
-            if not current_user.is_platform_admin:
-                it_owner_query = it_owner_query.where(
-                    UserTenant.tenant_id == tenancy.tenant_id
-                )
-            
-            result = await db.execute(it_owner_query)
-            it_owner = result.scalar_one_or_none()
-            
-            if not it_owner:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="IT owner membership not found",
-                )
-            
-            if it_owner.tenant_id != tenancy.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="IT owner must belong to the same tenant",
-                )
-        
-        # Update only provided fields
-        if application_data.name is not None:
-            application.name = application_data.name
-        if application_data.category is not None:
-            application.category = application_data.category
-        if application_data.scope_rationale is not None:
-            application.scope_rationale = application_data.scope_rationale
-        if application_data.business_owner_membership_id is not None:
-            application.business_owner_membership_id = application_data.business_owner_membership_id
-        if application_data.it_owner_membership_id is not None:
-            application.it_owner_membership_id = application_data.it_owner_membership_id
-        
-        await db.commit()
-        await db.refresh(application)
-        
-        return application
+        return ApplicationResponse.model_validate(application)
     except HTTPException:
         raise
     except Exception as e:
@@ -284,4 +146,32 @@ async def update_application(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update application: {str(e)}",
+        )
+
+
+@router.delete("/applications/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_application_endpoint(
+    application_id: UUID,
+    current_user: User = Depends(get_current_user),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete an application.
+    
+    Note: In Sub-stage A, this is a hard delete. In Sub-stage B, this will be a soft delete.
+    """
+    try:
+        await delete_application(
+            db,
+            membership_ctx=tenancy,
+            application_id=application_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete application: {str(e)}",
         )

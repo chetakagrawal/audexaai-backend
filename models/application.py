@@ -4,7 +4,8 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, ForeignKey, DateTime
+import sqlalchemy as sa
+from sqlalchemy import String, ForeignKey, DateTime, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
@@ -48,8 +49,52 @@ class Application(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+    created_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+    updated_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    row_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
 
+    # Partial unique index: name must be unique per tenant for ACTIVE applications only
+    # This allows reusing name after soft delete
     __table_args__ = (
+        # Partial unique index for PostgreSQL: unique (tenant_id, name) WHERE deleted_at IS NULL
+        Index(
+            'ux_applications_tenant_name_active',
+            'tenant_id',
+            'name',
+            postgresql_where=sa.text('deleted_at IS NULL'),
+            unique=True,
+        ),
         {"comment": "Applications are tenant-owned business applications"},
     )
 
@@ -90,3 +135,9 @@ class ApplicationResponse(ApplicationBase):
     id: UUID
     tenant_id: UUID
     created_at: datetime
+    created_by_membership_id: UUID | None = None
+    updated_at: datetime
+    updated_by_membership_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by_membership_id: UUID | None = None
+    row_version: int
