@@ -165,12 +165,18 @@ erDiagram
   applications {
     uuid id PK
     uuid tenant_id FK
-    string name
+    string name "Partial UK: (tenant_id, name) WHERE deleted_at IS NULL"
     string category
     string scope_rationale
     uuid business_owner_membership_id FK
     uuid it_owner_membership_id FK
     datetime created_at
+    uuid created_by_membership_id FK
+    datetime updated_at
+    uuid updated_by_membership_id FK
+    datetime deleted_at
+    uuid deleted_by_membership_id FK
+    int row_version
   }
 
   project_applications {
@@ -256,6 +262,9 @@ erDiagram
   user_tenants ||--o{ controls    : deleted_by
   user_tenants ||--o{ applications : business_owns
   user_tenants ||--o{ applications : it_owns
+  user_tenants ||--o{ applications : created_by
+  user_tenants ||--o{ applications : updated_by
+  user_tenants ||--o{ applications : deleted_by
 
   projects ||--o{ project_controls : has
   controls ||--o{ project_controls : referenced_in

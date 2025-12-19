@@ -4,7 +4,7 @@ These tests verify model behavior, database constraints, and query patterns
 for the Application model. All tests use a real database session.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -81,7 +81,7 @@ async def test_create_application_minimal(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_create_application_with_all_fields(db_session: AsyncSession):
     """Test: Can create an application with all fields populated."""
-    # Create tenant and membership
+    # Create tenant and memberships
     tenant = Tenant(
         id=uuid4(),
         name="Test Tenant",
@@ -91,34 +91,39 @@ async def test_create_application_with_all_fields(db_session: AsyncSession):
     db_session.add(tenant)
     await db_session.flush()
     
-    user = User(
+    # Use two different users since we can't have duplicate (user_id, tenant_id) memberships
+    business_user = User(
         id=uuid4(),
-        primary_email="owner@example.com",
-        name="Owner",
+        primary_email="business@example.com",
+        name="Business Owner",
         is_platform_admin=False,
         is_active=True,
     )
-    db_session.add(user)
+    it_user = User(
+        id=uuid4(),
+        primary_email="it@example.com",
+        name="IT Owner",
+        is_platform_admin=False,
+        is_active=True,
+    )
+    db_session.add_all([business_user, it_user])
     await db_session.flush()
     
     business_owner = UserTenant(
         id=uuid4(),
-        user_id=user.id,
+        user_id=business_user.id,
         tenant_id=tenant.id,
         role="admin",
         is_default=True,
     )
-    db_session.add(business_owner)
-    await db_session.flush()
-    
     it_owner = UserTenant(
         id=uuid4(),
-        user_id=user.id,
+        user_id=it_user.id,
         tenant_id=tenant.id,
         role="admin",
         is_default=False,
     )
-    db_session.add(it_owner)
+    db_session.add_all([business_owner, it_owner])
     await db_session.flush()
     
     # Create application with all fields
@@ -146,9 +151,10 @@ async def test_create_application_with_all_fields(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_application_allows_duplicate_names_per_tenant(db_session: AsyncSession):
     """
-    Test: Multiple applications with same name are allowed per tenant.
+    Test: Multiple applications with same name are NOT allowed per tenant for active applications.
     
-    Note: There's no unique constraint on (tenant_id, name), so duplicates are allowed.
+    Note: There's a unique constraint on (tenant_id, name) WHERE deleted_at IS NULL,
+    so duplicate names are only allowed if one is soft-deleted.
     """
     tenant = Tenant(
         id=uuid4(),
@@ -181,29 +187,59 @@ async def test_application_allows_duplicate_names_per_tenant(db_session: AsyncSe
     
     name = "ERP System"
     
+    # Save IDs before any rollback
+    tenant_id = tenant.id
+    membership_id = membership.id
+    
     # Create first application
+    app1_id = uuid4()
     app1 = Application(
-        id=uuid4(),
-        tenant_id=tenant.id,
+        id=app1_id,
+        tenant_id=tenant_id,
         name=name,
-        business_owner_membership_id=membership.id,
-        it_owner_membership_id=membership.id,
+        business_owner_membership_id=membership_id,
+        it_owner_membership_id=membership_id,
     )
     db_session.add(app1)
     await db_session.commit()
-    await db_session.refresh(app1)
     
-    # Create second application with same name (should succeed)
+    # Create second application with same name (should fail due to unique constraint)
     app2 = Application(
         id=uuid4(),
-        tenant_id=tenant.id,
+        tenant_id=tenant_id,
         name=name,  # Same name
-        business_owner_membership_id=membership.id,
-        it_owner_membership_id=membership.id,
+        business_owner_membership_id=membership_id,
+        it_owner_membership_id=membership_id,
     )
     db_session.add(app2)
     
-    # Should NOT raise IntegrityError
+    # Should raise IntegrityError due to unique constraint
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+    
+    await db_session.rollback()
+    
+    # Re-query app1 using the saved ID
+    result = await db_session.execute(
+        select(Application).where(Application.id == app1_id)
+    )
+    app1 = result.scalar_one()
+    
+    # However, if we soft-delete the first app, we can create another with the same name
+    app1.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    await db_session.refresh(app1)
+    
+    # Now create second application with same name (should succeed)
+    app2 = Application(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        name=name,  # Same name, but first is deleted
+        business_owner_membership_id=membership_id,
+        it_owner_membership_id=membership_id,
+    )
+    db_session.add(app2)
     await db_session.commit()
     await db_session.refresh(app2)
     
@@ -211,6 +247,8 @@ async def test_application_allows_duplicate_names_per_tenant(db_session: AsyncSe
     assert app1.id != app2.id
     assert app1.name == app2.name
     assert app1.tenant_id == app2.tenant_id
+    assert app1.deleted_at is not None
+    assert app2.deleted_at is None
 
 
 @pytest.mark.asyncio

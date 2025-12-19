@@ -80,3 +80,25 @@ Example:
 Overrides control behavior for a specific audit.
 Example:
 - Control is "key" this year but not last year
+
+### Application
+A business application within a tenant (e.g., ERP system, CRM, etc.).
+Example:
+- "SAP ERP" for Acme Corp
+- "Salesforce CRM" for Acme Corp
+
+**Audit Metadata:**
+- `created_by_membership_id`: Who created the application
+- `updated_at`: Timestamp of last modification
+- `updated_by_membership_id`: Who last updated the application
+- `deleted_at`: Soft delete timestamp (NULL if active)
+- `deleted_by_membership_id`: Who deleted the application
+- `row_version`: Tracks version for optimistic locking (increments on each update)
+
+**Uniqueness:**
+- `name` must be unique per tenant for **active** applications only (WHERE deleted_at IS NULL)
+- Allows reusing application names after soft delete
+
+**Ownership:**
+- `business_owner_membership_id`: Business owner of the application (nullable)
+- `it_owner_membership_id`: IT owner of the application (nullable)
