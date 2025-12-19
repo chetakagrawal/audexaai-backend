@@ -61,9 +61,20 @@ Example:
 - "FY25 SOX Audit" for Acme Corp
 
 ### Control (RACM)
-A SOX control owned by the tenant.
+A SOX control owned by the tenant with full audit trail tracking.
 Example:
 - User access provisioning control
+
+**Audit Metadata:**
+- `row_version`: Tracks version for optimistic locking (increments on each update)
+- `updated_at`: Timestamp of last modification
+- `updated_by_membership_id`: Who last updated the control
+- `deleted_at`: Soft delete timestamp (NULL if active)
+- `deleted_by_membership_id`: Who deleted the control
+
+**Uniqueness:**
+- `control_code` must be unique per tenant for **active** controls only
+- Allows reusing control codes after soft delete
 
 ### ProjectControl
 Overrides control behavior for a specific audit.
