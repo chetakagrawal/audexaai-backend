@@ -56,10 +56,9 @@ class Application(Base):
         nullable=True,
         index=True,
     )
-    updated_at: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
-        default=datetime.utcnow,
+        nullable=True,
         onupdate=datetime.utcnow,
     )
     updated_by_membership_id: Mapped[UUID | None] = mapped_column(
@@ -144,7 +143,7 @@ class ApplicationResponse(ApplicationBase):
     tenant_id: UUID
     created_at: datetime
     created_by_membership_id: UUID | None = None
-    updated_at: datetime
+    updated_at: datetime | None = None
     updated_by_membership_id: UUID | None = None
     deleted_at: datetime | None = None
     deleted_by_membership_id: UUID | None = None

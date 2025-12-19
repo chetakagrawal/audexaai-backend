@@ -656,7 +656,7 @@ async def test_service_delete_application_not_found(db_session: AsyncSession):
 # SUB-STAGE B tests: Metadata columns and soft delete
 @pytest.mark.asyncio
 async def test_service_create_application_sets_audit_metadata(db_session: AsyncSession):
-    """Test: Creating an application sets row_version=1, updated_at, created_by, updated_by=creator."""
+    """Test: Creating an application sets row_version=1, updated_at=None, created_by, updated_by=None."""
     # Setup
     tenant = Tenant(id=uuid4(), name="Test Tenant", slug="test-tenant", status="active")
     db_session.add(tenant)
@@ -701,9 +701,9 @@ async def test_service_create_application_sets_audit_metadata(db_session: AsyncS
     )
     
     assert application.row_version == 1
-    assert application.updated_at is not None
+    assert application.updated_at is None  # Should be NULL on creation
     assert application.created_by_membership_id == membership.id
-    assert application.updated_by_membership_id == membership.id  # Set to creator for consistency
+    assert application.updated_by_membership_id is None  # Not set on creation
     assert application.deleted_at is None
     assert application.deleted_by_membership_id is None
 
