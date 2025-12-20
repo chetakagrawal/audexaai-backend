@@ -1,23 +1,26 @@
 """Project endpoints with tenant isolation."""
 
+from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user, get_db, get_tenancy_context
-from models.project import Project, ProjectBase, ProjectResponse, ProjectUpdate
+from api.tenancy import TenancyContext
+from models.project import ProjectBase, ProjectResponse, ProjectUpdate
 from models.user import User
+from services.projects_service import create_project, get_project, list_projects, update_project
+from services.projects_versions_service import get_project_as_of, get_project_versions
 
 router = APIRouter()
 
 
 @router.get("/projects", response_model=List[ProjectResponse])
-async def list_projects(
+async def list_projects_endpoint(
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -27,16 +30,11 @@ async def list_projects(
         List of projects in the tenant.
     """
     try:
-        # Platform admins can see all projects
-        if current_user.is_platform_admin:
-            result = await db.execute(select(Project))
-        else:
-            # Regular users: filter by tenant_id
-            result = await db.execute(
-                select(Project).where(Project.tenant_id == tenancy.tenant_id)
-            )
-        
-        projects = result.scalars().all()
+        projects = await list_projects(
+            db,
+            membership_ctx=tenancy,
+            is_platform_admin=current_user.is_platform_admin,
+        )
         return projects
     except HTTPException:
         raise
@@ -48,10 +46,10 @@ async def list_projects(
 
 
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
-async def get_project(
+async def get_project_endpoint(
     project_id: UUID,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -64,22 +62,12 @@ async def get_project(
         404 if project not found or user doesn't have access.
     """
     try:
-        # Build query with tenant filtering
-        query = select(Project).where(Project.id == project_id)
-        
-        if not current_user.is_platform_admin:
-            # Regular users: must filter by tenant_id
-            query = query.where(Project.tenant_id == tenancy.tenant_id)
-        
-        result = await db.execute(query)
-        project = result.scalar_one_or_none()
-        
-        if not project:
-            raise HTTPException(
-                status_code=404,
-                detail="Project not found",
-            )
-        
+        project = await get_project(
+            db,
+            membership_ctx=tenancy,
+            project_id=project_id,
+            is_platform_admin=current_user.is_platform_admin,
+        )
         return project
     except HTTPException:
         raise
@@ -91,10 +79,10 @@ async def get_project(
 
 
 @router.post("/projects", response_model=ProjectResponse)
-async def create_project(
+async def create_project_endpoint(
     project_data: ProjectBase,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -103,20 +91,11 @@ async def create_project(
     Note: tenant_id in request is ignored - uses tenant from membership context.
     """
     try:
-        # Override tenant_id and created_by_membership_id from membership context (security: never trust client)
-        project = Project(
-            tenant_id=tenancy.tenant_id,
-            created_by_membership_id=tenancy.membership_id,
-            name=project_data.name,
-            status=project_data.status,
-            period_start=project_data.period_start,
-            period_end=project_data.period_end,
+        project = await create_project(
+            db,
+            membership_ctx=tenancy,
+            payload=project_data,
         )
-        
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
-        
         return project
     except HTTPException:
         raise
@@ -129,11 +108,11 @@ async def create_project(
 
 
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
-async def update_project(
+async def update_project_endpoint(
     project_id: UUID,
     project_data: ProjectUpdate,
     current_user: User = Depends(get_current_user),
-    tenancy=Depends(get_tenancy_context),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -142,35 +121,13 @@ async def update_project(
     Only provided fields will be updated.
     """
     try:
-        # Build query with tenant filtering
-        query = select(Project).where(Project.id == project_id)
-        
-        if not current_user.is_platform_admin:
-            # Regular users: must filter by tenant_id
-            query = query.where(Project.tenant_id == tenancy.tenant_id)
-        
-        result = await db.execute(query)
-        project = result.scalar_one_or_none()
-        
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found",
-            )
-        
-        # Update only provided fields
-        if project_data.name is not None:
-            project.name = project_data.name
-        if project_data.status is not None:
-            project.status = project_data.status
-        if project_data.period_start is not None:
-            project.period_start = project_data.period_start
-        if project_data.period_end is not None:
-            project.period_end = project_data.period_end
-        
-        await db.commit()
-        await db.refresh(project)
-        
+        project = await update_project(
+            db,
+            membership_ctx=tenancy,
+            project_id=project_id,
+            payload=project_data,
+            is_platform_admin=current_user.is_platform_admin,
+        )
         return project
     except HTTPException:
         raise
@@ -179,5 +136,75 @@ async def update_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update project: {str(e)}",
+        )
+
+
+@router.get("/projects/{project_id}/versions")
+async def get_project_versions_endpoint(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all version snapshots for a project.
+    
+    Returns:
+        List of version snapshots with metadata and data.
+    
+    Raises:
+        404 if project not found or user doesn't have access.
+    """
+    try:
+        versions = await get_project_versions(
+            db,
+            membership_ctx=tenancy,
+            project_id=project_id,
+        )
+        return versions
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch project versions: {str(e)}",
+        )
+
+
+@router.get("/projects/{project_id}/versions/as-of")
+async def get_project_as_of_endpoint(
+    project_id: UUID,
+    as_of: datetime = Query(..., description="Point in time to query (ISO format datetime)"),
+    current_user: User = Depends(get_current_user),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get project state as it existed at a specific point in time.
+    
+    Args:
+        project_id: Project ID
+        as_of: Point in time to query (ISO format datetime)
+    
+    Returns:
+        Project data as dict (from snapshot or current state)
+    
+    Raises:
+        404 if project not found, user doesn't have access, or project didn't exist at that time.
+    """
+    try:
+        project_data = await get_project_as_of(
+            db,
+            membership_ctx=tenancy,
+            project_id=project_id,
+            as_of=as_of,
+        )
+        return project_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch project state: {str(e)}",
         )
 

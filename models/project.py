@@ -4,7 +4,7 @@ from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, Date, DateTime, ForeignKey
+from sqlalchemy import String, Date, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
@@ -42,6 +42,33 @@ class Project(Base):
         DateTime(timezone=True),
         nullable=False,
         default=datetime.utcnow,
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=datetime.utcnow,
+    )
+    updated_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    row_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
     )
 
     # Composite index for tenant-scoped lookups
@@ -85,4 +112,9 @@ class ProjectResponse(ProjectBase):
     tenant_id: UUID
     created_by_membership_id: UUID
     created_at: datetime
+    updated_at: datetime | None = None
+    updated_by_membership_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by_membership_id: UUID | None = None
+    row_version: int
 
