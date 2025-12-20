@@ -80,7 +80,7 @@ class ProjectControlApplication(Base):
     # Allows same application to be re-added after removal (creates new row with new version freeze)
     __table_args__ = (
         Index(
-            'ux_pca_active',
+            'ux_project_control_apps_active',
             'tenant_id',
             'project_control_id',
             'application_id',

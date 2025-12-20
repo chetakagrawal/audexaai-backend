@@ -54,7 +54,7 @@ def upgrade() -> None:
     
     # Create partial unique index for active records only
     op.execute("""
-        CREATE UNIQUE INDEX ux_pca_active 
+        CREATE UNIQUE INDEX ux_project_control_apps_active 
         ON project_control_applications (tenant_id, project_control_id, application_id) 
         WHERE removed_at IS NULL
     """)
@@ -64,7 +64,7 @@ def downgrade() -> None:
     """Drop project_control_applications table."""
     
     # Drop indexes
-    op.execute('DROP INDEX IF EXISTS ux_pca_active')
+    op.execute('DROP INDEX IF EXISTS ux_project_control_apps_active')
     op.drop_index('ix_pca_tenant_application', table_name='project_control_applications')
     op.drop_index('ix_pca_tenant_project_control', table_name='project_control_applications')
     op.drop_index('ix_project_control_applications_removed_at', table_name='project_control_applications')

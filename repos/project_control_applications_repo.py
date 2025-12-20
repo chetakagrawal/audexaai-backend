@@ -69,32 +69,28 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
-async def list_by_project_control(
+async def list_active_by_project_control(
     session: AsyncSession,
     *,
     tenant_id: UUID,
     project_control_id: UUID,
-    include_removed: bool = False,
 ) -> list[ProjectControlApplication]:
     """
-    List all project-control-application mappings for a project control.
+    List all active (non-removed) project-control-application mappings for a project control.
     
     Args:
         session: Database session
         tenant_id: Tenant ID to filter by
         project_control_id: ProjectControl ID to filter by
-        include_removed: If True, include removed mappings
     
     Returns:
-        List of ProjectControlApplication mappings
+        List of active ProjectControlApplication mappings
     """
     query = select(ProjectControlApplication).where(
         ProjectControlApplication.tenant_id == tenant_id,
         ProjectControlApplication.project_control_id == project_control_id,
+        ProjectControlApplication.removed_at.is_(None),
     )
-    
-    if not include_removed:
-        query = query.where(ProjectControlApplication.removed_at.is_(None))
     
     result = await session.execute(query)
     return [pca for pca in result.scalars().all()]

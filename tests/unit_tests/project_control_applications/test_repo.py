@@ -274,8 +274,8 @@ async def test_get_by_id_excludes_removed_by_default(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_list_by_project_control_returns_active_only(db_session: AsyncSession):
-    """Test: list_by_project_control returns only active mappings by default."""
+async def test_list_active_by_project_control_returns_active_only(db_session: AsyncSession):
+    """Test: list_active_by_project_control returns only active mappings."""
     tenant = Tenant(id=uuid4(), name="Test Tenant", slug="test-tenant", status="active")
     db_session.add(tenant)
     await db_session.flush()
@@ -348,7 +348,7 @@ async def test_list_by_project_control_returns_active_only(db_session: AsyncSess
     await db_session.commit()
     
     # List active only
-    result = await project_control_applications_repo.list_by_project_control(
+    result = await project_control_applications_repo.list_active_by_project_control(
         db_session,
         tenant_id=tenant_id,
         project_control_id=project_control_id,
@@ -361,71 +361,6 @@ async def test_list_by_project_control_returns_active_only(db_session: AsyncSess
     assert pca3_removed.application_id not in application_ids
 
 
-@pytest.mark.asyncio
-async def test_list_by_project_control_includes_removed_when_requested(db_session: AsyncSession):
-    """Test: list_by_project_control includes removed mappings when include_removed=True."""
-    tenant = Tenant(id=uuid4(), name="Test Tenant", slug="test-tenant", status="active")
-    db_session.add(tenant)
-    await db_session.flush()
-    user = User(id=uuid4(), primary_email="user@example.com", name="Test User", is_platform_admin=False, is_active=True)
-    db_session.add(user)
-    await db_session.flush()
-    membership = UserTenant(id=uuid4(), user_id=user.id, tenant_id=tenant.id, role="admin", is_default=True)
-    db_session.add(membership)
-    await db_session.flush()
-    
-    tenant_id = tenant.id
-    membership_id = membership.id
-    
-    # Create project_control and applications
-    project_control, application1 = await create_minimal_project_control_and_application(
-        db_session, tenant_id, membership_id
-    )
-    application2 = Application(
-        id=uuid4(),
-        tenant_id=tenant_id,
-        created_by_membership_id=membership_id,
-        name="Test Application 2",
-        created_at=datetime.utcnow(),
-        row_version=1,
-    )
-    db_session.add(application2)
-    await db_session.flush()
-    
-    project_control_id = project_control.id
-    
-    pca1 = ProjectControlApplication(
-        tenant_id=tenant_id,
-        project_control_id=project_control_id,
-        application_id=application1.id,
-        application_version_num=1,
-        source="manual",
-        added_at=datetime.utcnow(),
-        added_by_membership_id=membership_id,
-    )
-    pca2_removed = ProjectControlApplication(
-        tenant_id=tenant_id,
-        project_control_id=project_control_id,
-        application_id=application2.id,
-        application_version_num=2,
-        source="manual",
-        added_at=datetime.utcnow(),
-        added_by_membership_id=membership_id,
-        removed_at=datetime.utcnow(),
-        removed_by_membership_id=membership_id,
-    )
-    db_session.add_all([pca1, pca2_removed])
-    await db_session.commit()
-    
-    # List with include_removed
-    result = await project_control_applications_repo.list_by_project_control(
-        db_session,
-        tenant_id=tenant_id,
-        project_control_id=project_control_id,
-        include_removed=True,
-    )
-    
-    assert len(result) == 2
 
 
 @pytest.mark.asyncio
@@ -563,8 +498,8 @@ async def test_tenant_isolation_in_get_active(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_tenant_isolation_in_list_by_project_control(db_session: AsyncSession):
-    """Test: list_by_project_control enforces tenant isolation."""
+async def test_tenant_isolation_in_list_active_by_project_control(db_session: AsyncSession):
+    """Test: list_active_by_project_control enforces tenant isolation."""
     tenant_a_obj = Tenant(id=uuid4(), name="Tenant A", slug="tenant-a", status="active")
     db_session.add(tenant_a_obj)
     await db_session.flush()
@@ -645,7 +580,7 @@ async def test_tenant_isolation_in_list_by_project_control(db_session: AsyncSess
     await db_session.commit()
     
     # List for tenant A should only return tenant A mappings
-    result_a = await project_control_applications_repo.list_by_project_control(
+    result_a = await project_control_applications_repo.list_active_by_project_control(
         db_session,
         tenant_id=tenant_a,
         project_control_id=project_control_id,
@@ -655,7 +590,7 @@ async def test_tenant_isolation_in_list_by_project_control(db_session: AsyncSess
     assert all(pca.tenant_id == tenant_a for pca in result_a)
     
     # List for tenant B should only return tenant B mappings
-    result_b = await project_control_applications_repo.list_by_project_control(
+    result_b = await project_control_applications_repo.list_active_by_project_control(
         db_session,
         tenant_id=tenant_b,
         project_control_id=project_control_b.id,
