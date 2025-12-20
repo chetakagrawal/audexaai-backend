@@ -4,9 +4,10 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, ForeignKey, DateTime, Text
+from sqlalchemy import String, ForeignKey, DateTime, Text, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+import sqlalchemy as sa
 
 from db import Base
 
@@ -44,8 +45,50 @@ class TestAttribute(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+    created_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=datetime.utcnow,
+    )
+    updated_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    row_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
 
     __table_args__ = (
+        # Partial unique index: (tenant_id, control_id, code) must be unique for ACTIVE test attributes
+        Index(
+            'ux_test_attributes_active_code',
+            'tenant_id',
+            'control_id',
+            'code',
+            postgresql_where=sa.text('deleted_at IS NULL'),
+            unique=True,
+        ),
         {"comment": "Test attributes define test procedures and expected evidence for controls"},
     )
 
@@ -77,3 +120,9 @@ class TestAttributeResponse(TestAttributeBase):
     tenant_id: UUID
     control_id: UUID
     created_at: datetime
+    created_by_membership_id: UUID | None = None
+    updated_at: datetime | None = None
+    updated_by_membership_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by_membership_id: UUID | None = None
+    row_version: int
