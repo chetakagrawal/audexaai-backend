@@ -49,8 +49,14 @@ async def create_test_attribute(
             detail="Control not found",
         )
     
+    # Ensure membership_id is set (should always be present, but validate)
+    if not membership_ctx.membership_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No active membership. User must belong to a tenant.",
+        )
+    
     # Create test attribute instance
-    now = datetime.now(UTC)
     test_attribute = TestAttribute(
         tenant_id=membership_ctx.tenant_id,
         control_id=control_id,
@@ -60,8 +66,8 @@ async def create_test_attribute(
         test_procedure=payload.test_procedure,
         expected_evidence=payload.expected_evidence,
         created_by_membership_id=membership_ctx.membership_id,
-        updated_at=now,
         row_version=1,
+        # updated_at and updated_by_membership_id are None on creation (only set on updates)
     )
     
     # Create in database

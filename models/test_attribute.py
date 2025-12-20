@@ -45,10 +45,10 @@ class TestAttribute(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    created_by_membership_id: Mapped[UUID | None] = mapped_column(
+    created_by_membership_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("user_tenants.id", ondelete="RESTRICT"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     updated_at: Mapped[datetime | None] = mapped_column(
@@ -120,7 +120,7 @@ class TestAttributeResponse(TestAttributeBase):
     tenant_id: UUID
     control_id: UUID
     created_at: datetime
-    created_by_membership_id: UUID | None = None
+    created_by_membership_id: UUID
     updated_at: datetime | None = None
     updated_by_membership_id: UUID | None = None
     deleted_at: datetime | None = None
