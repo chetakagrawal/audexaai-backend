@@ -76,6 +76,12 @@ Example:
 - `control_code` must be unique per tenant for **active** controls only
 - Allows reusing control codes after soft delete
 
+**Version History:**
+- All updates and deletes are automatically captured in `entity_versions` table
+- Each change creates a snapshot of the OLD row state before modification
+- Soft deletes are tracked as DELETE operations
+- Version history is queryable via service layer (`controls_versions_service`)
+
 ### ProjectControl
 Overrides control behavior for a specific audit.
 Example:
@@ -102,3 +108,35 @@ Example:
 **Ownership:**
 - `business_owner_membership_id`: Business owner of the application (nullable)
 - `it_owner_membership_id`: IT owner of the application (nullable)
+
+**Version History:**
+- All updates and deletes are automatically captured in `entity_versions` table
+- Each change creates a snapshot of the OLD row state before modification
+- Soft deletes are tracked as DELETE operations
+- Version history is queryable via service layer (`applications_versions_service`)
+
+---
+
+### EntityVersion (Version History)
+
+Generic table that stores version snapshots for any entity type (currently `controls` and `applications`).
+
+**How It Works:**
+- Postgres triggers automatically capture OLD row state before UPDATE/DELETE
+- Each snapshot includes the full row data as JSONB
+- Tracks `version_num` (from OLD.row_version), `valid_from`/`valid_to` timestamps
+- Records who made the change via `changed_by_membership_id`
+
+**Fields:**
+- `entity_type`: Table name (e.g., 'controls', 'applications')
+- `entity_id`: ID of the entity being versioned
+- `operation`: 'UPDATE' or 'DELETE'
+- `version_num`: The row_version that was captured (OLD.row_version)
+- `valid_from`: When this version was valid (COALESCE(OLD.updated_at, OLD.created_at))
+- `valid_to`: When this version ended (NOW() when snapshot was created)
+- `data`: Full JSONB snapshot of the OLD row
+
+**Usage:**
+- Query all versions: `get_control_versions()` or `get_application_versions()`
+- Query state at point in time: `get_control_as_of()` or `get_application_as_of()`
+- All queries are tenant-scoped for security

@@ -373,6 +373,23 @@ erDiagram
   }
 
   %% =========================
+  %% VERSION HISTORY
+  %% =========================
+  entity_versions {
+    uuid id PK
+    uuid tenant_id FK
+    string entity_type "e.g., 'controls', 'applications'"
+    uuid entity_id
+    string operation "CHECK: 'UPDATE' or 'DELETE'"
+    int version_num
+    datetime valid_from
+    datetime valid_to
+    datetime changed_at
+    uuid changed_by_membership_id FK
+    jsonb data "Full snapshot of OLD row"
+  }
+
+  %% =========================
   %% RELATIONSHIPS
   %% =========================
   users ||--o{ user_tenants : has
@@ -445,6 +462,11 @@ erDiagram
   projects ||--o{ findings : tracks
   ai_run_outputs ||--o{ findings : may_create
   user_tenants ||--o{ findings : created_by
+
+  tenants ||--o{ entity_versions : scopes
+  user_tenants ||--o{ entity_versions : changed_by
+  controls ||--o{ entity_versions : "has versions (entity_type='controls')"
+  applications ||--o{ entity_versions : "has versions (entity_type='applications')"
 
 ```
 

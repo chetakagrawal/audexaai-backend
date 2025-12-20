@@ -132,8 +132,17 @@ The following endpoints require `X-Membership-Id`:
 - `GET /api/v1/controls` - List controls
 - `POST /api/v1/controls` - Create control
 - `GET /api/v1/controls/{control_id}` - Get control
+- `PUT /api/v1/controls/{control_id}` - Update control
+- `DELETE /api/v1/controls/{control_id}` - Delete control (soft delete)
 - `GET /api/v1/projects/{project_id}/controls` - List project controls
 - `POST /api/v1/projects/{project_id}/controls` - Attach control to project
+- `GET /api/v1/applications` - List applications
+- `POST /api/v1/applications` - Create application
+- `GET /api/v1/applications/{application_id}` - Get application
+- `PUT /api/v1/applications/{application_id}` - Update application
+- `DELETE /api/v1/applications/{application_id}` - Delete application (soft delete)
+
+**Note:** All updates and deletes on `controls` and `applications` are automatically tracked in version history. Version history is accessible via service layer (`controls_versions_service` and `applications_versions_service`). API endpoints for querying version history may be added in the future.
 
 ---
 
