@@ -89,6 +89,72 @@ async def test_service_create_test_attribute_sets_tenant_and_control(db_session:
 
 
 @pytest.mark.asyncio
+async def test_service_create_test_attribute_sets_created_by_membership_id(db_session: AsyncSession):
+    """Test: Creating a test attribute sets created_by_membership_id correctly."""
+    # Setup
+    tenant = Tenant(id=uuid4(), name="Test Tenant", slug="test-tenant", status="active")
+    db_session.add(tenant)
+    await db_session.flush()
+    
+    user = User(
+        id=uuid4(),
+        primary_email="user@example.com",
+        name="Test User",
+        is_platform_admin=False,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    
+    membership = UserTenant(
+        id=uuid4(),
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role="admin",
+        is_default=True,
+    )
+    db_session.add(membership)
+    await db_session.flush()
+    
+    control = Control(
+        tenant_id=tenant.id,
+        created_by_membership_id=membership.id,
+        control_code="AC-001",
+        name="Test Control",
+        row_version=1,
+    )
+    db_session.add(control)
+    await db_session.commit()
+    
+    membership_ctx = TenancyContext(
+        membership_id=membership.id,
+        tenant_id=tenant.id,
+        role="admin",
+    )
+    
+    # Create test attribute
+    payload = TestAttributeCreate(
+        code="TA-002",
+        name="Test Attribute with Membership",
+        frequency="Quarterly",
+    )
+    
+    test_attribute = await create_test_attribute(
+        db_session,
+        membership_ctx=membership_ctx,
+        control_id=control.id,
+        payload=payload,
+    )
+    
+    # Verify created_by_membership_id is set correctly
+    assert test_attribute.created_by_membership_id == membership.id
+    assert test_attribute.created_by_membership_id is not None
+    # Verify it's persisted in the database
+    await db_session.refresh(test_attribute)
+    assert test_attribute.created_by_membership_id == membership.id
+
+
+@pytest.mark.asyncio
 async def test_service_create_test_attribute_rejects_different_tenant_control(db_session: AsyncSession):
     """Test: Cannot create test attribute for control from different tenant."""
     # Setup two tenants
@@ -212,6 +278,8 @@ async def test_service_update_test_attribute(db_session: AsyncSession):
         control_id=control.id,
         code="TA-003",
         name="Original Name",
+        created_by_membership_id=membership.id,
+        row_version=1,
     )
     db_session.add(test_attribute)
     await db_session.commit()
@@ -284,6 +352,8 @@ async def test_service_delete_test_attribute(db_session: AsyncSession):
         control_id=control.id,
         code="TA-004",
         name="Test Attribute",
+        created_by_membership_id=membership.id,
+        row_version=1,
     )
     db_session.add(test_attribute)
     await db_session.commit()
@@ -356,12 +426,16 @@ async def test_service_list_test_attributes_for_control(db_session: AsyncSession
         control_id=control.id,
         code="TA-005-1",
         name="Test Attribute 1",
+        created_by_membership_id=membership.id,
+        row_version=1,
     )
     ta2 = TestAttribute(
         tenant_id=tenant.id,
         control_id=control.id,
         code="TA-005-2",
         name="Test Attribute 2",
+        created_by_membership_id=membership.id,
+        row_version=1,
     )
     db_session.add(ta1)
     db_session.add(ta2)

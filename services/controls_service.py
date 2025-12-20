@@ -102,6 +102,7 @@ async def create_control(
         created_by_membership_id=membership_ctx.membership_id,
         control_code=payload.control_code,
         name=payload.name,
+        description=payload.description,
         category=payload.category,
         risk_rating=payload.risk_rating,
         control_type=payload.control_type,
@@ -283,6 +284,7 @@ async def update_control(
     # Update control fields
     control.control_code = payload.control_code
     control.name = payload.name
+    control.description = payload.description
     control.category = payload.category
     control.risk_rating = payload.risk_rating
     control.control_type = payload.control_type

@@ -154,6 +154,7 @@ async def get_control_as_of(
             "created_by_membership_id": control.created_by_membership_id,
             "control_code": control.control_code,
             "name": control.name,
+            "description": control.description,
             "category": control.category,
             "risk_rating": control.risk_rating,
             "control_type": control.control_type,

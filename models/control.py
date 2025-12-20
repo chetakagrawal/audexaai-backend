@@ -5,7 +5,7 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict
 import sqlalchemy as sa
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Integer, Index
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Integer, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from uuid import UUID, uuid4
@@ -38,6 +38,7 @@ class Control(Base):
     )
     control_code: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     risk_rating: Mapped[str | None] = mapped_column(String(50), nullable=True)
     control_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -107,6 +108,7 @@ class ControlBase(BaseModel):
 
     control_code: str
     name: str
+    description: str | None = None
     category: str | None = None
     risk_rating: str | None = None
     control_type: str | None = None

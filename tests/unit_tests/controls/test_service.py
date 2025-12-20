@@ -85,6 +85,76 @@ async def test_service_create_control_sets_audit_metadata(db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
+async def test_service_create_control_with_description(db_session: AsyncSession):
+    """Test: Creating a control with description saves it correctly."""
+    # Setup
+    tenant = Tenant(id=uuid4(), name="Test Tenant", slug="test-tenant", status="active")
+    db_session.add(tenant)
+    await db_session.flush()
+    
+    user = User(
+        id=uuid4(),
+        primary_email="user@example.com",
+        name="Test User",
+        is_platform_admin=False,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    
+    membership = UserTenant(
+        id=uuid4(),
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role="admin",
+        is_default=True,
+    )
+    db_session.add(membership)
+    await db_session.commit()
+    
+    membership_ctx = TenancyContext(
+        membership_id=membership.id,
+        tenant_id=tenant.id,
+        role="admin",
+    )
+    
+    # Create control with description
+    payload = ControlCreate(
+        control_code="AC-001-DESC",
+        name="Test Control with Description",
+        description="This is a test control description",
+        is_key=False,
+        is_automated=False,
+    )
+    
+    control = await create_control(
+        db_session,
+        membership_ctx=membership_ctx,
+        payload=payload,
+    )
+    
+    assert control.description == "This is a test control description"
+    
+    # Test update with description
+    update_payload = ControlCreate(
+        control_code="AC-001-DESC",
+        name="Test Control with Description",
+        description="Updated description",
+        is_key=False,
+        is_automated=False,
+    )
+    
+    updated = await update_control(
+        db_session,
+        membership_ctx=membership_ctx,
+        control_id=control.id,
+        payload=update_payload,
+    )
+    
+    assert updated.description == "Updated description"
+
+
+@pytest.mark.asyncio
 async def test_service_update_control_increments_row_version(db_session: AsyncSession):
     """Test: Updating a control increments row_version and sets updated_by."""
     # Setup
