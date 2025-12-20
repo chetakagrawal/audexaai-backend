@@ -149,10 +149,15 @@ This is a minimal skeleton with:
 - ✅ Database connection management
 - ✅ Alembic migrations setup
 - ✅ Database health check endpoint
+- ✅ Multi-tenant data model (tenants, users, memberships)
+- ✅ Controls and Applications CRUD with audit metadata
+- ✅ Version history system (automatic snapshots via Postgres triggers)
+  - Generic `entity_versions` table for version snapshots
+  - Automatic capture on UPDATE/DELETE for `controls` and `applications`
+  - Service layer for querying version history
 
 **Not yet implemented:**
-- Database models (Base is ready, no models yet)
-- Authentication
+- Authentication (in progress)
 - SQS integration
 - LLM integration
 

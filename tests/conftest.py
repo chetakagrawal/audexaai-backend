@@ -40,14 +40,18 @@ async def db_session():
     
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Create trigger function and trigger for version history
+        # Create generic trigger function for version history (works for both controls and applications)
         await conn.execute(text("""
-            CREATE OR REPLACE FUNCTION audit_capture_control_version()
+            CREATE OR REPLACE FUNCTION audit_capture_entity_version()
             RETURNS TRIGGER AS $$
             DECLARE
                 v_operation TEXT;
                 v_changed_by_membership_id UUID;
+                v_entity_type TEXT;
             BEGIN
+                -- Determine entity_type from table name
+                v_entity_type := TG_TABLE_NAME;
+                
                 -- Determine operation
                 IF TG_OP = 'DELETE' THEN
                     v_operation := 'DELETE';
@@ -78,7 +82,7 @@ async def db_session():
                     data
                 ) VALUES (
                     OLD.tenant_id,
-                    'controls',
+                    v_entity_type,
                     OLD.id,
                     v_operation,
                     OLD.row_version,
@@ -97,12 +101,21 @@ async def db_session():
             END;
             $$ LANGUAGE plpgsql;
         """))
+        # Create trigger for controls
         await conn.execute(text("""
             DROP TRIGGER IF EXISTS trigger_audit_capture_control_version ON controls;
             CREATE TRIGGER trigger_audit_capture_control_version
             BEFORE UPDATE OR DELETE ON controls
             FOR EACH ROW
-            EXECUTE FUNCTION audit_capture_control_version();
+            EXECUTE FUNCTION audit_capture_entity_version();
+        """))
+        # Create trigger for applications
+        await conn.execute(text("""
+            DROP TRIGGER IF EXISTS trigger_audit_capture_application_version ON applications;
+            CREATE TRIGGER trigger_audit_capture_application_version
+            BEFORE UPDATE OR DELETE ON applications
+            FOR EACH ROW
+            EXECUTE FUNCTION audit_capture_entity_version();
         """))
     
     async with TestSessionLocal() as session:
@@ -111,9 +124,10 @@ async def db_session():
     
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        # Drop trigger and function
+        # Drop triggers and function
         await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_control_version ON controls;"))
-        await conn.execute(text("DROP FUNCTION IF EXISTS audit_capture_control_version();"))
+        await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_application_version ON applications;"))
+        await conn.execute(text("DROP FUNCTION IF EXISTS audit_capture_entity_version();"))
 
 
 @pytest.fixture
