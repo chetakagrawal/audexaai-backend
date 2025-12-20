@@ -1,0 +1,13 @@
+﻿Adminer Connection Details for Audexa Backend Database:
+
+URL: http://localhost:8080
+
+Database Connection:
+- System: PostgreSQL
+- Server: host.docker.internal
+- Username: postgres
+- Password: audexa123
+- Database: audexa
+- Port: 5432
+
+Note: Adminer runs in Docker container, so use host.docker.internal instead of localhost to connect to postgres-audexa container.
