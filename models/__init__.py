@@ -10,6 +10,7 @@ from models.auth_identity import AuthIdentity
 from models.project import Project
 from models.control import Control
 from models.project_control import ProjectControl
+from models.project_control_application import ProjectControlApplication
 from models.application import Application
 from models.project_application import ProjectApplication
 from models.control_application import ControlApplication
@@ -32,6 +33,7 @@ __all__ = [
     "Project",
     "Control",
     "ProjectControl",
+    "ProjectControlApplication",
     "Application",
     "ProjectApplication",
     "ControlApplication",

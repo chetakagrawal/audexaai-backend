@@ -7,12 +7,17 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_db, get_tenancy_context
+from models.application import ApplicationResponse
 from models.project_control import (
     ProjectControlCreate,
     ProjectControlUpdate,
     ProjectControlResponse,
 )
-from services import project_controls_service
+from models.project_control_application import (
+    ProjectControlApplicationCreate,
+    ProjectControlApplicationResponse,
+)
+from services import project_controls_service, project_control_applications_service
 
 router = APIRouter()
 
@@ -137,5 +142,78 @@ async def remove_project_control(
         db,
         membership_ctx=tenancy,
         project_control_id=project_control_id,
+    )
+    await db.commit()
+
+
+@router.post(
+    "/project-controls/{project_control_id}/applications",
+    response_model=ProjectControlApplicationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_application_to_project_control(
+    project_control_id: UUID,
+    application_data: ProjectControlApplicationCreate,
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Attach an application to a project control with version freezing.
+    
+    Creates a project_control_applications row linking the project control to the application.
+    Freezes the application version at the current applications.row_version.
+    Idempotent: returns existing mapping if already attached.
+    """
+    result = await project_control_applications_service.add_application_to_project_control(
+        db,
+        membership_ctx=tenancy,
+        project_control_id=project_control_id,
+        application_id=application_data.application_id,
+    )
+    await db.commit()
+    await db.refresh(result)
+    return result
+
+
+@router.get(
+    "/project-controls/{project_control_id}/applications",
+    response_model=List[ApplicationResponse],
+)
+async def list_applications_for_project_control(
+    project_control_id: UUID,
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List all active applications attached to a project control.
+    
+    Returns only active mappings (excludes removed applications).
+    """
+    return await project_control_applications_service.list_applications_for_project_control(
+        db,
+        membership_ctx=tenancy,
+        project_control_id=project_control_id,
+    )
+
+
+@router.delete(
+    "/project-control-applications/{pca_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_application_from_project_control(
+    pca_id: UUID,
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Remove (soft delete) an application from a project control.
+    
+    Sets removed_at and removed_by_membership_id.
+    Idempotent: removing twice is a no-op.
+    """
+    await project_control_applications_service.remove_application_from_project_control(
+        db,
+        membership_ctx=tenancy,
+        pca_id=pca_id,
     )
     await db.commit()
