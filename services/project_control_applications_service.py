@@ -200,11 +200,10 @@ async def list_applications_for_project_control(
         )
     
     # List active mappings only
-    pca_list = await project_control_applications_repo.list_by_project_control(
+    pca_list = await project_control_applications_repo.list_active_by_project_control(
         session,
         tenant_id=tenant_id,
         project_control_id=project_control_id,
-        include_removed=False,
     )
     
     # Fetch Application objects and convert to responses
