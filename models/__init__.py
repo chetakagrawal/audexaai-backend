@@ -12,7 +12,6 @@ from models.control import Control
 from models.project_control import ProjectControl
 from models.project_control_application import ProjectControlApplication
 from models.application import Application
-from models.project_application import ProjectApplication
 from models.control_application import ControlApplication
 from models.test_attribute import TestAttribute
 from models.project_test_attribute_override import ProjectTestAttributeOverride
@@ -36,7 +35,6 @@ __all__ = [
     "ProjectControl",
     "ProjectControlApplication",
     "Application",
-    "ProjectApplication",
     "ControlApplication",
     "TestAttribute",
     "ProjectTestAttributeOverride",
