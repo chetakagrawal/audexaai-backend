@@ -1,10 +1,11 @@
-"""ProjectControl model - join table linking projects to controls."""
+"""ProjectControl model - join table linking projects to controls with version freezing."""
 
 from datetime import datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint, DateTime
+import sqlalchemy as sa
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
@@ -12,7 +13,7 @@ from db import Base
 
 
 class ProjectControl(Base):
-    """ProjectControl ORM model - links projects to controls with overrides."""
+    """ProjectControl ORM model - links projects to controls with version freezing."""
 
     __tablename__ = "project_controls"
 
@@ -36,13 +37,44 @@ class ProjectControl(Base):
     )
     control_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("controls.id", ondelete="CASCADE"),
+        ForeignKey("controls.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
+    # Version freezing: captures control.row_version at the moment this control is added to project
+    control_version_num: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    # Override fields (project-specific overrides of control attributes)
     is_key_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     frequency_override: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Audit trail for adding
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    added_by_membership_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    # Soft delete (removal from project)
+    removed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    removed_by_membership_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("user_tenants.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    # Standard audit columns
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -71,11 +103,20 @@ class ProjectControl(Base):
         index=True,
     )
 
-    # Composite unique constraint: (tenant_id, project_id, control_id)
-    # Ensures a control can only be added once per project, scoped by tenant
+    # Partial unique index: (tenant_id, project_id, control_id) WHERE removed_at IS NULL
+    # Allows same control to be re-added after removal (creates new row with new version freeze)
     __table_args__ = (
-        UniqueConstraint("tenant_id", "project_id", "control_id", name="uq_project_control_tenant"),
-        {"comment": "Join table linking projects to controls with tenant isolation"},
+        Index(
+            'ux_project_controls_active',
+            'tenant_id',
+            'project_id',
+            'control_id',
+            postgresql_where=sa.text('removed_at IS NULL'),
+            unique=True,
+        ),
+        Index('ix_project_controls_tenant_project', 'tenant_id', 'project_id'),
+        Index('ix_project_controls_tenant_control', 'tenant_id', 'control_id'),
+        {"comment": "Join table linking projects to controls with tenant isolation and version freezing"},
     )
 
 
@@ -91,10 +132,21 @@ class ProjectControlBase(BaseModel):
 class ProjectControlCreate(ProjectControlBase):
     """Schema for creating a project control.
     
-    Note: tenant_id and project_id are NOT included - they're set from context server-side.
+    Note: tenant_id, project_id, and control_version_num are NOT included - they're set from context server-side.
     """
 
     control_id: UUID
+
+
+class ProjectControlUpdate(BaseModel):
+    """Schema for updating project control overrides.
+    
+    Only override fields can be updated. Version and control_id are immutable.
+    """
+
+    is_key_override: bool | None = None
+    frequency_override: str | None = None
+    notes: str | None = None
 
 
 class ProjectControlResponse(ProjectControlBase):
@@ -106,6 +158,11 @@ class ProjectControlResponse(ProjectControlBase):
     tenant_id: UUID
     project_id: UUID
     control_id: UUID
+    control_version_num: int
+    added_at: datetime
+    added_by_membership_id: UUID
+    removed_at: datetime | None = None
+    removed_by_membership_id: UUID | None = None
     created_at: datetime
     updated_at: datetime | None = None
     updated_by_membership_id: UUID | None = None
