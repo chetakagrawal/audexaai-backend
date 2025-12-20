@@ -117,6 +117,14 @@ async def db_session():
             FOR EACH ROW
             EXECUTE FUNCTION audit_capture_entity_version();
         """))
+        # Create trigger for test_attributes
+        await conn.execute(text("""
+            DROP TRIGGER IF EXISTS trigger_audit_capture_test_attribute_version ON test_attributes;
+            CREATE TRIGGER trigger_audit_capture_test_attribute_version
+            BEFORE UPDATE OR DELETE ON test_attributes
+            FOR EACH ROW
+            EXECUTE FUNCTION audit_capture_entity_version();
+        """))
     
     async with TestSessionLocal() as session:
         yield session
@@ -127,6 +135,7 @@ async def db_session():
         # Drop triggers and function
         await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_control_version ON controls;"))
         await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_application_version ON applications;"))
+        await conn.execute(text("DROP TRIGGER IF EXISTS trigger_audit_capture_test_attribute_version ON test_attributes;"))
         await conn.execute(text("DROP FUNCTION IF EXISTS audit_capture_entity_version();"))
 
 
