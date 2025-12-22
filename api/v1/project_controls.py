@@ -175,6 +175,34 @@ async def attach_application_to_project_control(
     return result
 
 
+@router.delete(
+    "/project-controls/{project_control_id}/applications/{application_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_application_from_project_control_by_ids(
+    project_control_id: UUID,
+    application_id: UUID,
+    tenancy=Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Remove (soft delete) an application from a project control by project_control_id and application_id.
+    
+    Sets removed_at and removed_by_membership_id.
+    Idempotent: removing twice is a no-op.
+    
+    This endpoint is more convenient for frontend use as it doesn't require
+    the mapping ID (pca_id), just the project control and application IDs.
+    """
+    await project_control_applications_service.remove_application_from_project_control_by_ids(
+        db,
+        membership_ctx=tenancy,
+        project_control_id=project_control_id,
+        application_id=application_id,
+    )
+    await db.commit()
+
+
 @router.get(
     "/project-controls/{project_control_id}/applications",
     response_model=List[ApplicationResponse],
