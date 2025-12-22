@@ -159,6 +159,52 @@ async def remove_application_from_project_control(
     await project_control_applications_repo.save(session, pca)
 
 
+async def remove_application_from_project_control_by_ids(
+    session: AsyncSession,
+    *,
+    membership_ctx: TenancyContext,
+    project_control_id: UUID,
+    application_id: UUID,
+) -> None:
+    """
+    Remove (soft delete) an application from a project control by project_control_id and application_id.
+    
+    Business rules:
+    - Soft delete: sets removed_at and removed_by_membership_id
+    - Does NOT hard delete the row
+    - Idempotent: removing twice is a no-op (no error)
+    
+    Args:
+        session: Database session
+        membership_ctx: Membership context
+        project_control_id: ProjectControl ID
+        application_id: Application ID
+    
+    Raises:
+        HTTPException: 404 if project control application not found
+    """
+    tenant_id = membership_ctx.tenant_id
+    membership_id = membership_ctx.membership_id
+    
+    # Get existing active mapping
+    pca = await project_control_applications_repo.get_active(
+        session,
+        tenant_id=tenant_id,
+        project_control_id=project_control_id,
+        application_id=application_id,
+    )
+    
+    # Idempotent: if not found or already removed, do nothing
+    if not pca:
+        return
+    
+    # Soft delete
+    pca.removed_at = datetime.utcnow()
+    pca.removed_by_membership_id = membership_id
+    
+    await project_control_applications_repo.save(session, pca)
+
+
 async def list_applications_for_project_control(
     session: AsyncSession,
     *,
