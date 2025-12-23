@@ -16,6 +16,7 @@ from models.control_application import ControlApplication
 from models.test_attribute import TestAttribute
 from models.project_test_attribute_override import ProjectTestAttributeOverride
 from models.pbc_request import PbcRequest
+from models.pbc_request_item import PbcRequestItem
 from models.sample import Sample
 from models.evidence_file import EvidenceFile
 from models.signup import Signup
@@ -39,6 +40,7 @@ __all__ = [
     "TestAttribute",
     "ProjectTestAttributeOverride",
     "PbcRequest",
+    "PbcRequestItem",
     "Sample",
     "EvidenceFile",
     "Signup",
