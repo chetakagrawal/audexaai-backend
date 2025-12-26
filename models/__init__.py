@@ -23,7 +23,9 @@ from models.signup import Signup
 from models.setup_token import SetupToken
 from models.tenant_sso_config import TenantSSOConfig
 from models.entity_version import EntityVersion
-from models.entity_version import EntityVersion
+from models.evidence_artifact import EvidenceArtifact
+from models.evidence_file_v2 import EvidenceFileV2
+from models.pbc_request_evidence_file import PbcRequestEvidenceFile
 
 __all__ = [
     "Base",
@@ -43,6 +45,9 @@ __all__ = [
     "PbcRequestItem",
     "Sample",
     "EvidenceFile",
+    "EvidenceArtifact",
+    "EvidenceFileV2",
+    "PbcRequestEvidenceFile",
     "Signup",
     "SetupToken",
     "TenantSSOConfig",
