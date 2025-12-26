@@ -45,22 +45,29 @@ class PbcRequestItem(Base):
         nullable=False,
         index=True,
     )
-    project_control_id: Mapped[UUID] = mapped_column(
+    # FK-based entity references (preferred approach)
+    project_control_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("project_controls.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    application_id: Mapped[UUID] = mapped_column(
+    control_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("controls.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    application_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("applications.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    test_attribute_id: Mapped[UUID] = mapped_column(
+    test_attribute_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("test_attributes.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     # SNAPSHOT FIELDS (immutable after creation)
@@ -132,7 +139,10 @@ class PbcRequestItem(Base):
 
     __table_args__ = (
         # Indexes are created by migration m1n2o3p4q5r6
-        {"comment": "PBC request line items with snapshot semantics"},
+        Index("ix_pbc_request_items_control_id", "control_id"),
+        # Unique constraint ensuring no duplicate line items per request
+        # Note: Partial index created by migration to handle soft deletes
+        {"comment": "PBC request line items with FK-based entity references"},
     )
 
 
@@ -140,6 +150,22 @@ class PbcRequestItem(Base):
 class PbcRequestItemBase(BaseModel):
     """Base PBC request item schema."""
 
+    status: str = "not_started"
+    assignee_membership_id: UUID | None = None
+    instructions_extra: str | None = None
+    notes: str | None = None
+
+
+class PbcRequestItemCreate(BaseModel):
+    """Schema for creating a PBC request item with FK-based entity references."""
+
+    # Entity references (at least one of project_control_id or control_id must be provided)
+    project_control_id: UUID | None = None
+    control_id: UUID | None = None
+    application_id: UUID | None = None
+    test_attribute_id: UUID | None = None
+
+    # Workflow fields (optional on creation)
     status: str = "not_started"
     assignee_membership_id: UUID | None = None
     instructions_extra: str | None = None
@@ -164,9 +190,10 @@ class PbcRequestItemResponse(BaseModel):
     tenant_id: UUID
     project_id: UUID
     pbc_request_id: UUID
-    project_control_id: UUID
-    application_id: UUID
-    test_attribute_id: UUID
+    project_control_id: UUID | None
+    control_id: UUID | None
+    application_id: UUID | None
+    test_attribute_id: UUID | None
     # Snapshot fields
     pinned_control_version_num: int
     pinned_test_attribute_version_num: int

@@ -18,7 +18,6 @@ from models.project_test_attribute_override import ProjectTestAttributeOverride
 from models.pbc_request import PbcRequest
 from models.pbc_request_item import PbcRequestItem
 from models.sample import Sample
-from models.evidence_file import EvidenceFile
 from models.signup import Signup
 from models.setup_token import SetupToken
 from models.tenant_sso_config import TenantSSOConfig
@@ -44,7 +43,6 @@ __all__ = [
     "PbcRequest",
     "PbcRequestItem",
     "Sample",
-    "EvidenceFile",
     "EvidenceArtifact",
     "EvidenceFileV2",
     "PbcRequestEvidenceFile",
