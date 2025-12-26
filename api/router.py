@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from api.v1 import auth, controls, db_check, health, me_stub, project_controls, projects, setup, signups, tenants, users, applications, control_applications, test_attributes, pbc_requests, pbc, samples, evidence_files, project_test_attribute_overrides
+from api.v1 import auth, controls, db_check, health, me_stub, project_controls, projects, setup, signups, tenants, users, applications, control_applications, test_attributes, pbc_requests, pbc, pbc_evidence, samples, evidence_files, project_test_attribute_overrides
 from api.v1.admin import signups as admin_signups
 
 # Main API router
@@ -25,6 +25,7 @@ v1_router.include_router(test_attributes.router, tags=["test-attributes"])
 v1_router.include_router(project_test_attribute_overrides.router, tags=["project-test-attribute-overrides"])
 v1_router.include_router(pbc_requests.router, tags=["pbc-requests"])
 v1_router.include_router(pbc.router, tags=["pbc-v2"])
+v1_router.include_router(pbc_evidence.router, tags=["pbc-evidence"])
 v1_router.include_router(samples.router, tags=["samples"])
 v1_router.include_router(evidence_files.router, tags=["evidence-files"])
 v1_router.include_router(signups.router, tags=["signups"])

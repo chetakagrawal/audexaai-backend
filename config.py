@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     
     # Application Environment
     APP_ENV: str = "dev"
+    
+    # Evidence Storage Configuration
+    EVIDENCE_STORAGE_DIR: str = "./storage/evidence"
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent / ".env"),

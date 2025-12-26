@@ -1,6 +1,6 @@
 """add_pbc_requests_table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: p1q2r3s4t5u6
 Revises: 35543335bb6e
 Create Date: 2025-01-10 12:00:00.000000
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a1b2c3d4e5f6'
+revision: str = 'p1q2r3s4t5u6'
 down_revision: Union[str, Sequence[str], None] = '35543335bb6e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
