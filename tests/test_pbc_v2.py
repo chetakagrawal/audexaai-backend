@@ -523,3 +523,496 @@ async def test_replace_drafts_mode_soft_deletes_existing_drafts(
     assert second_request.deleted_at is None
     assert second_request.status == "draft"
 
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_with_project_control_fk(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: Create PBC request item with project_control_id FK works."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create project, control, application, test_attribute
+    project = Project(
+        tenant_id=tenant_a.id,
+        name="Test Project",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project)
+    await db_session.flush()
+
+    control = Control(
+        tenant_id=tenant_a.id,
+        control_code="TC001",
+        name="Test Control",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(control)
+    await db_session.flush()
+
+    application = Application(
+        tenant_id=tenant_a.id,
+        name="Test App",
+        application_code="TA001",
+        criticality="high",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(application)
+    await db_session.flush()
+
+    test_attribute = TestAttribute(
+        control_id=control.id,
+        name="Test Attribute",
+        data_type="boolean",
+        is_required=True,
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(test_attribute)
+    await db_session.flush()
+
+    project_control = ProjectControl(
+        tenant_id=tenant_a.id,
+        project_id=project.id,
+        control_id=control.id,
+        created_by_membership_id=membership_a.id,
+        is_frozen=False,
+    )
+    db_session.add(project_control)
+    await db_session.flush()
+
+    # Create PBC request
+    pbc_request = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project.id,
+            title="Test PBC Request",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Create PBC request item with FKs
+    item_data = {
+        "project_control_id": str(project_control.id),
+        "application_id": str(application.id),
+        "test_attribute_id": str(test_attribute.id),
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["pbc_request_id"] == str(pbc_request.id)
+    assert data["project_control_id"] == str(project_control.id)
+    assert data["application_id"] == str(application.id)
+    assert data["test_attribute_id"] == str(test_attribute.id)
+    assert data["status"] == "not_started"
+
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_with_control_id_alternative(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: Create PBC request item with control_id (alternative to project_control_id)."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create project, control, application, test_attribute
+    project = Project(
+        tenant_id=tenant_a.id,
+        name="Test Project",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project)
+    await db_session.flush()
+
+    control = Control(
+        tenant_id=tenant_a.id,
+        control_code="TC001",
+        name="Test Control",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(control)
+    await db_session.flush()
+
+    application = Application(
+        tenant_id=tenant_a.id,
+        name="Test App",
+        application_code="TA001",
+        criticality="high",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(application)
+    await db_session.flush()
+
+    test_attribute = TestAttribute(
+        control_id=control.id,
+        name="Test Attribute",
+        data_type="boolean",
+        is_required=True,
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(test_attribute)
+    await db_session.flush()
+
+    # Create PBC request
+    pbc_request = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project.id,
+            title="Test PBC Request",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Create PBC request item with control_id instead of project_control_id
+    item_data = {
+        "control_id": str(control.id),
+        "application_id": str(application.id),
+        "test_attribute_id": str(test_attribute.id),
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["pbc_request_id"] == str(pbc_request.id)
+    assert data["control_id"] == str(control.id)
+    assert data["application_id"] == str(application.id)
+    assert data["test_attribute_id"] == str(test_attribute.id)
+    assert data["project_control_id"] is None  # Should be null when using control_id
+
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_requires_control_reference(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: Creating PBC request item requires either project_control_id or control_id."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create project
+    project = Project(
+        tenant_id=tenant_a.id,
+        name="Test Project",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project)
+    await db_session.flush()
+
+    # Create PBC request
+    pbc_request = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project.id,
+            title="Test PBC Request",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Try to create item without any control reference
+    item_data = {
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert "Either project_control_id or control_id must be provided" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_cross_tenant_rejection(
+    client, tenant_a, tenant_b, user_tenant_a, db_session
+):
+    """Test: Cross-tenant FK references are rejected."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create project in tenant_a
+    project_a = Project(
+        tenant_id=tenant_a.id,
+        name="Project A",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project_a)
+    await db_session.flush()
+
+    # Create control in tenant_b (cross-tenant)
+    control_b = Control(
+        tenant_id=tenant_b.id,
+        control_code="TB001",
+        name="Tenant B Control",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,  # This won't work in real scenario
+    )
+    db_session.add(control_b)
+    await db_session.flush()
+
+    # Create PBC request in tenant_a
+    pbc_request = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project_a.id,
+            title="Test PBC Request",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Try to create item with cross-tenant control reference
+    item_data = {
+        "control_id": str(control_b.id),
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 404
+    assert "Control not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_wrong_project_rejection(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: project_control_id from different project than PBC request is rejected."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create two projects
+    project_a = Project(
+        tenant_id=tenant_a.id,
+        name="Project A",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project_a)
+
+    project_b = Project(
+        tenant_id=tenant_a.id,
+        name="Project B",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project_b)
+    await db_session.flush()
+
+    # Create control
+    control = Control(
+        tenant_id=tenant_a.id,
+        control_code="TC001",
+        name="Test Control",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(control)
+    await db_session.flush()
+
+    # Create project_control for project_b
+    project_control_b = ProjectControl(
+        tenant_id=tenant_a.id,
+        project_id=project_b.id,  # Different project
+        control_id=control.id,
+        created_by_membership_id=membership_a.id,
+        is_frozen=False,
+    )
+    db_session.add(project_control_b)
+    await db_session.flush()
+
+    # Create PBC request for project_a
+    pbc_request_a = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project_a.id,  # This project
+            title="PBC Request A",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Try to create item with project_control from different project
+    item_data = {
+        "project_control_id": str(project_control_b.id),
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request_a.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert "must belong to the same project" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_pbc_request_item_test_attribute_validation(
+    client, tenant_a, user_tenant_a, db_session
+):
+    """Test: test_attribute_id must belong to the referenced control."""
+    user_a, membership_a = user_tenant_a
+
+    token = create_dev_token(
+        user_id=user_a.id,
+        tenant_id=tenant_a.id,
+        role=membership_a.role,
+        is_platform_admin=False,
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Membership-Id": str(membership_a.id),
+    }
+
+    # Create project
+    project = Project(
+        tenant_id=tenant_a.id,
+        name="Test Project",
+        status="active",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(project)
+    await db_session.flush()
+
+    # Create two controls
+    control_a = Control(
+        tenant_id=tenant_a.id,
+        control_code="TCA",
+        name="Control A",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(control_a)
+
+    control_b = Control(
+        tenant_id=tenant_a.id,
+        control_code="TCB",
+        name="Control B",
+        control_type="preventive",
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(control_b)
+    await db_session.flush()
+
+    # Create test attribute for control_b
+    test_attribute_b = TestAttribute(
+        control_id=control_b.id,  # Belongs to control_b
+        name="Test Attribute B",
+        data_type="boolean",
+        is_required=True,
+        created_by_membership_id=membership_a.id,
+    )
+    db_session.add(test_attribute_b)
+    await db_session.flush()
+
+    # Create PBC request
+    pbc_request = await pbc_repo.create_request(
+        db_session,
+        PbcRequest(
+            tenant_id=tenant_a.id,
+            project_id=project.id,
+            title="Test PBC Request",
+            status="draft",
+            created_by_membership_id=membership_a.id,
+            row_version=1,
+        )
+    )
+
+    # Try to create item with control_a but test_attribute from control_b
+    item_data = {
+        "control_id": str(control_a.id),
+        "test_attribute_id": str(test_attribute_b.id),  # Wrong control
+        "status": "not_started",
+    }
+
+    response = client.post(
+        f"/v1/pbc/{pbc_request.id}/items",
+        json=item_data,
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert "must belong to the referenced control" in response.json()["detail"]

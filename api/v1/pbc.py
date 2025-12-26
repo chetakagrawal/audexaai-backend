@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.deps import get_current_user, get_db, get_tenancy_context
 from api.tenancy import TenancyContext
 from models.pbc_request import PbcRequestResponse, PbcRequestUpdate
-from models.pbc_request_item import PbcRequestItemResponse, PbcRequestItemUpdate
+from models.pbc_request_item import PbcRequestItemCreate, PbcRequestItemResponse, PbcRequestItemUpdate
 from models.user import User
 from services.pbc_service import (
+    create_pbc_request_item,
     generate_pbc,
     get_pbc_request,
     list_pbc_requests,
@@ -212,6 +213,57 @@ async def list_pbc_request_items_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list PBC request items: {str(e)}",
+        )
+
+
+@router.post(
+    "/pbc/{pbc_request_id}/items",
+    response_model=PbcRequestItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_pbc_request_item_endpoint(
+    pbc_request_id: UUID,
+    payload: PbcRequestItemCreate,
+    current_user: User = Depends(get_current_user),
+    tenancy: TenancyContext = Depends(get_tenancy_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a new PBC request item with FK-based entity references.
+
+    Args:
+        pbc_request_id: Parent PBC request ID
+        payload: Item creation data with FKs
+
+    Returns:
+        Created PBC request item
+
+    Raises:
+        400 if validation fails (invalid FKs, cross-tenant, etc.)
+        404 if referenced entities not found
+    """
+    try:
+        item = await create_pbc_request_item(
+            db,
+            membership_ctx=tenancy,
+            pbc_request_id=pbc_request_id,
+            project_control_id=payload.project_control_id,
+            control_id=payload.control_id,
+            application_id=payload.application_id,
+            test_attribute_id=payload.test_attribute_id,
+            status=payload.status,
+            assignee_membership_id=payload.assignee_membership_id,
+            instructions_extra=payload.instructions_extra,
+            notes=payload.notes,
+        )
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create PBC request item: {str(e)}",
         )
 
 
